@@ -1,0 +1,54 @@
+from functools import wraps
+from concurrent.futures import ThreadPoolExecutor
+
+
+class EventMix:
+    
+    instances = {}
+    instances_opts = {}
+
+    _background = ThreadPoolExecutor(16)
+    _counter = {}
+    
+    def action_listener(self, ch, *args, callback = None, **kargs):
+        fn = EventMix.instances.get(ch, '')
+        if fn:
+            f = getattr(self, fn)
+        else:
+            return
+
+        f_opts = EventMix.instances_opts.get(f, {'background':False})
+        if f:
+            if f_opts['background']:
+                res = EventMix._background.submit(f, *args, **kargs)
+                if callback:
+                    res.add_done_callback(lambda x: callback(x.result()))
+            else:
+                res = f(*args, **kargs)
+                if callback:
+                    callback(res)
+
+    @classmethod
+    def register(cls, ch, func, background=False, **kargs):
+        kargs.update({"background":background})
+        cls.instances[ord(ch)] = func.__name__
+        cls.instances_opts[func] = kargs
+        cls._counter[ch] = 0
+
+    @classmethod
+    def if_run(cls, ch):
+        return cls._counter.get(ch, 0)
+
+    def ready_key(self, ch):
+        EventMix._counter[chr(ch)]= 0
+ 
+def listener(ch,use=1,background=False):
+    def _run(funcs):
+        EventMix.register(ch, funcs, background=background)
+        @wraps(funcs)
+        def __run(self,*args, **kargs):
+            if EventMix.if_run(ch) < use:
+                EventMix._counter[ch] += 1
+                return funcs(self,*args, **kargs)
+        return __run
+    return _run
