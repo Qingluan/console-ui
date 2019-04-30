@@ -1,6 +1,6 @@
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
-
+import curses
 
 class EventMix:
     
@@ -31,7 +31,10 @@ class EventMix:
     @classmethod
     def register(cls, ch, func, background=False, **kargs):
         kargs.update({"background":background})
-        cls.instances[ord(ch)] = func.__name__
+        if isinstance(ch, str):
+            ch = ord(ch)
+        
+        cls.instances[ch] = func.__name__
         cls.instances_opts[func] = kargs
         cls._counter[ch] = 0
 
@@ -40,15 +43,27 @@ class EventMix:
         return cls._counter.get(ch, 0)
 
     def ready_key(self, ch):
-        EventMix._counter[chr(ch)]= 0
+        if isinstance(ch, int):
+            EventMix._counter[ch]= 0
+        else:
+            EventMix._counter[ord(ch)]= 0
+            
+
  
 def listener(ch,use=1,background=False):
+    if isinstance(ch,str):
+        ch = ord(ch)
     def _run(funcs):
         EventMix.register(ch, funcs, background=background)
         @wraps(funcs)
         def __run(self,*args, **kargs):
             if EventMix.if_run(ch) < use:
-                EventMix._counter[ch] += 1
+                # if isinstance(ch, str):
+                    # ch = ord(ch)
+                
+                n = EventMix._counter.get(ch, 0) + 1
+                EventMix._counter[ch] = n
+                # import pdb;pdb.set_trace()
                 return funcs(self,*args, **kargs)
         return __run
     return _run

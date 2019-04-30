@@ -31,11 +31,12 @@ def infoShow(screen, win):
 
 class Application(EventMix):
     height,width = 0,0
+    widgets = {}
 
     def __init__(self, top_margin=1):
         self.border = 1
         self.screen = None#curses.initscr()
-        self.widgets = {}
+        # self.widgets = {}
         self.widgets_opts = {}
         self.top = top_margin
         self.ids = []
@@ -61,10 +62,10 @@ class Application(EventMix):
 
         #import pdb;pdb.set_trace();
         if len(self.ids) > 0:
-            widget.left_widget = self.widgets[self.ids[-1]]
-            self.widgets[self.ids[-1]].right_widget = widget
+            widget.left_widget = self.__class__.widgets[self.ids[-1]]
+            self.__class__.widgets[self.ids[-1]].right_widget = widget
         self.ids.append(id)
-        self.widgets[id] = widget
+        self.__class__.widgets[id] = widget
         self.widgets_opts[id] = kargs
 
 
@@ -78,6 +79,7 @@ class Application(EventMix):
                 widget.action_listener(ch)
 
         for id, widget in self.widgets.items():
+            if isinstance(widget, Text):continue
             ops = self.widgets_opts[id]
             y = top
             pad_width = int(ops['weight'] * width_weight)
@@ -93,10 +95,14 @@ class Application(EventMix):
 
     def focus(self, idx):
         self.widgets[idx].focus = True
+    
+    @classmethod
+    def Focus(cls, idx):
+        cls.widgets[idx].focus = True
 
     def draw_extra(self, y ,x):
         if self.border:
-            #self.draw_border(y, x)
+            # self.draw_border(y, x)
             pass
 
     def draw_border(self, y ,x):
@@ -119,10 +125,47 @@ class Application(EventMix):
             self.screen.refresh()
             curses.doupdate()
             k = self.screen.getch()
+            msgBox(stdscr, "type: %d " % k)
 
+    @classmethod
+    def get_widget_by_id(cls, id):
+        return cls.widgets.get(id)
 
+class Text(EventMix):
 
+    def __init__(self, id=None, **ops):
+        self.screen = None
+        self.cursor = 0
+        self.border = 1
+        self.focus = False
+        self.left_widget = None
+        self.right_widget = None
+        self.id = id
+        self.pad = None
+        self.top = 0
 
+        self.px = None
+        self.py = None
+        self.Spy, self.Spx = None, None
+
+    def update(self, screen, y, x, pad_width,pad_height=30,ch=None, draw=True):
+        if not self.screen:
+            self.screen = screen
+        stdscr = self.screen
+        stdscr.addstr(0, 0, "Enter IM message: (hit Ctrl-G to send)")
+
+        editwin = curses.newwin(30,30, 30,30)
+        rectangle(stdscr, 1,0, 5 + y, 30+x)
+        stdscr.refresh()
+
+        box = Textbox(editwin)
+
+        # Let the user edit until Ctrl-G is struck.
+        box.edit()
+
+        # Get resulting contents
+        # screen.clear()
+        message = box.gather()
 
 
 class Stack(EventMix):
@@ -141,6 +184,7 @@ class Stack(EventMix):
 
         self.px = None
         self.py = None
+        self.Spy, self.Spx = None, None
 
     @property
     def width(self):
@@ -151,8 +195,12 @@ class Stack(EventMix):
 
     @listener("k")
     def up(self):
-        if self.cursor > 0 and self.py == 0:
+        if self.cursor > 0 and self.py == self.Spy:
             self.cursor -= 1
+        elif self.cursor == 0 and self.py == self.Spy:
+            self.py = min([Application.height, self.height]) -1
+            if self.height > Application.height:
+                self.cursor = self.height -  Application.height
         else:
             if self.py > 0:
                self.py -= 1
@@ -180,14 +228,27 @@ class Stack(EventMix):
     @listener("j")
     def down(self):
         sm = min([Application.height, self.height])
-        if self.py >= sm -1 and self.cursor < sm -1:
+        if self.py >= sm -1 and self.cursor < sm:
             if self.height > Application.height:
                 self.cursor += 1
+            else:
+                self.cursor = 0
+                self.py = self.Spy
         else:
             #infoShow(self.screen, self)
             self.py += 1
             self.screen.move(self.py ,self.px)
             infoShow(self.screen, self)
+    
+    @listener(10)
+    def enter(self):
+        msgBox(self.screen," hello world")
+        r_x = self.width
+        r_y = self.py
+        text = Application.get_widget_by_id("text")
+        if text:
+            text.update(self.screen, r_y, r_x, Application.width)
+
 
     def update(self, screen, y, x, pad_width,ch=None, draw=True):
         if not self.screen:
@@ -195,6 +256,7 @@ class Stack(EventMix):
         max_heigh,max_width = screen.getmaxyx()
         if self.py is None:
             self.py,self.px = screen.getyx()
+            self.Spy, self.Spx = screen.getyx()
         datas = self.datas
         #if self.focus:
         #    self.action_listener(ch)
@@ -235,9 +297,11 @@ if __name__ =="__main__":
     r2 = Stack(["s2"+str(i) for i in range(10)], id='2')
     r3 = Stack(["s3"+str(i) for i in range(10)], id='3')
     r4 = Stack(["s3"+str(i) for i in range(10)], id='4')
+    t= Text(id='text')
     main.add_widget(r1, weight=0.5)
     main.add_widget(r2)
     main.add_widget(r3)
+    main.add_widget(t)
     curses.wrapper(main.loop)
 
 
