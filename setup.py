@@ -3,11 +3,11 @@ from setuptools import setup, find_packages
 
 
 setup(name='x_menu',
-    version='0.0.0',
+    version='0.0.1',
     description='api for console ui',
-    url='https://github.com/xxx',
+    url='https://github.com/Qingluan/console-ui.git',
     author='auth',
-    author_email='xxx@gmail.com',
+    author_email='darkhackdevil@gmail.com',
     license='MIT',
     include_package_data=True,
     zip_safe=False,
