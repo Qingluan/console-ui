@@ -59,6 +59,7 @@ if __name__ == "__main__":
     main.focus("middle")
     main.add_widget(e)
     curses.wrapper(main.loop)
+    curses.endwin()
 
 
 
