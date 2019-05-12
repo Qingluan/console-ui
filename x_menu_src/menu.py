@@ -28,7 +28,8 @@ def infoShow(screen, win):
     cy,cx = screen.getyx()
     h,w = screen.getmaxyx()
     wh = win.height
-    msgBox(screen, "id:%s yx:%d,%d  py:%d, height:%d, screen_h:%d cur:%d" % (win.id, cy,cx, win.py, wh, h, win.cursor))
+    ww = win.width
+    msgBox(screen, "id:%s yx:%d,%d  py:%d, height:%d, screen_h:%d screen_w:%d cur:%d" % (win.id, cy,cx, win.py, wh, h,ww, win.cursor))
 
 
 class Application(EventMix):
@@ -36,7 +37,7 @@ class Application(EventMix):
     widgets = {}
     instance = None
     editor = None
-
+    top = 0
     def __init__(self, top_margin=1):
         self.border = 1
         self.borders = []
@@ -45,8 +46,16 @@ class Application(EventMix):
         self.widgets_opts = {}
         self.top = top_margin
         self.ids = []
+        Application.top = self.top
         if Application.instance is None:
             Application.instance = self
+
+    def __setitem__(self, id, widget, **kargs):
+        self.widgets_opts[id].update(kargs)
+        self.__class__.widgets[id] = widget
+    
+    def __getitem__(self, id):
+        return  self.__class__.widgets[id]
 
     @property
     def weight(self):
@@ -64,28 +73,43 @@ class Application(EventMix):
         Application.height, Application.width = self.screen.getmaxyx() 
         return Application.height, Application.width
 
-    def add_widget(self, widget,id=None, weight=1, **kargs):
+    def add_widget(self, widget,id=None, weight=1, direct='r', **kargs):
         kargs.update({
             'weight':weight,
         })
-        if widget.id:
-            id = widget.id
+
+        if not id:
+            if widget.id:
+                id = widget.id
         if not id:
             id = os.urandom(8).hex()
         widget.top = self.top
 
         #import pdb;pdb.set_trace();
-        if len(self.ids) > 0:
-            widget.left_widget = self.__class__.widgets[self.ids[-1]]
-            self.__class__.widgets[self.ids[-1]].right_widget = widget
-        self.ids.append(id)
+        
+        if direct == 'r':
+            if len(self.ids) > 0:
+                widget.left_widget = self.__class__.widgets[self.ids[-1]]
+                self.__class__.widgets[self.ids[-1]].right_widget = widget
+            self.ids.append(id)
+        else:
+            if len(self.ids) > 0:
+                widget.right_widget = self.__class__.widgets[self.ids[0]]
+                self.__class__.widgets[self.ids[0]].left_widget = widget
+            self.ids.insert(0, id)
+
         self.__class__.widgets[id] = widget
         self.widgets_opts[id] = kargs
     
     def clear_widget(self):
-        self.widgets_opts[id] = {}
+        self.widgets_opts = {}
         self.ids = []
         self.__class__.widgets = {}
+
+    def del_widget(self, id):
+        del self.widgets_opts[id]
+        self.ids.remove(id)
+        del self.__class__.widgets[id]
 
 
     def update_all(self, top=2,ch=None):
@@ -99,13 +123,15 @@ class Application(EventMix):
 
         for id, widget in self.widgets.items():
             if isinstance(widget, Text):continue
+            if hasattr(widget, 'update_widgets'):
+                widget.update_widgets()
             ops = self.widgets_opts[id]
             y = top
             pad_width = int(ops['weight'] * width_weight)
             widget.update(self.screen,y,now_x, pad_width,ch=ch)
             if is_not_first:
                 self.draw_extra(y, now_x)
-
+            
             now_x += pad_width
             if not is_not_first:
                 is_not_first = True
@@ -113,6 +139,8 @@ class Application(EventMix):
             self.ready_key(ch)
 
     def focus(self, idx):
+        for v in self.widgets.values():
+            v.focux = False
         self.widgets[idx].focus = True
     
     @classmethod
@@ -129,7 +157,7 @@ class Application(EventMix):
         for r in range(self.top,h):
             self.screen.addch(r,x-1, ord('|'))
 
-    def refresh(self, k=0, clear=False, focus=None):
+    def refresh(self,focus=None, k=0, clear=False):
         if self.screen == None:
             return
         if clear:
@@ -137,6 +165,7 @@ class Application(EventMix):
         
         if focus:
             self.focus(focus)
+        # import pdb;pdb.set_trace()
         self.update_all(self.top, ch=k)
         curses.doupdate()
         self.screen.refresh()
@@ -148,13 +177,24 @@ class Application(EventMix):
         if not self.screen:
             self.screen = stdscr
 
-        self.refresh(clear=True, focus=self.ids[0])
-        #curses.doupdate()
+        self.refresh(clear=True)
+        # curses.doupdate()
         #self.screen.move(0,0)
+        # ii = ''
+        # for ki,v in self.widgets.items():
+            # if v.focus == True:
+                # ii = ki
+        c = 0
         while k != ord('q'):
-            msgBox(stdscr, "type: %d " % k)
-            self.refresh(k=k)
+            if c == 0:
+                self.refresh(k=k, clear=False)
+                c  = 1
+            else:
+                self.refresh(k=k, clear=True)
+            # msgBox(stdscr, "type: %d " % k)
+            
             k = self.screen.getch()
+            
             
 
     @classmethod
@@ -166,12 +206,7 @@ class _Textbox(Textbox):
     def __init__(self, win, insert_mode=True):
         super(_Textbox, self).__init__(win, insert_mode)
 
-    # def do_command(self, ch):
-    #     if ch == 10: # Enter
-    #         return 0
-    #     if ch == 127: # Enter
-    #         return 8
-    #     return Textbox.do_command(self, ch)
+    
     def do_command(self, ch):
         if ch == 127:  # BackSpace
             Textbox.do_command(self, 8)
@@ -265,9 +300,10 @@ class Stack(EventMix):
         if self.cursor > 0 and self.py == self.Spy:
             self.cursor -= 1
         elif self.cursor == 0 and self.py == self.Spy:
-            self.py = min([Application.height, self.height]) -1
+            self.py = min([Application.height, self.height]) - 1 - Application.top
             if self.height > Application.height:
-                self.cursor = self.height -  Application.height
+                self.cursor = self.height -  Application.height + Application.top
+            infoShow(self.screen, self)
         else:
             if self.py > 0:
                self.py -= 1
@@ -301,17 +337,31 @@ class Stack(EventMix):
     @listener("j")
     def down(self):
         sm = min([Application.height, self.height])
-        if self.py >= sm -1 and self.cursor < sm:
+        top = Application.top
+        if self.py >= Application.height - top -1:
+            if self.py + self.cursor >= self.height -1 :
+                self.cursor = 0
+                self.py = self.Spy
+                self.ix = 0
+            else:
+                # msgBox(msg="if")
+                self.cursor += 1
+            infoShow(self.screen, self)
+        elif self.py > sm -1 - top and self.cursor < sm:
+            # msgBox(msg='elif')
             if self.height > Application.height:
                 self.cursor += 1
             else:
                 self.cursor = 0
                 self.py = self.Spy
+                self.ix = 0
+            infoShow(self.screen, self)
         else:
-            #infoShow(self.screen, self)
+            # msgBox(msg='else')
+            infoShow(self.screen, self)
             self.py += 1
             self.screen.move(self.py ,self.px)
-            infoShow(self.screen, self)
+            # infoShow(self.screen, self)
         self.ix += 1 
         if self.ix >= self.height:
             self.ix = self.height - 1 
@@ -341,6 +391,7 @@ class Stack(EventMix):
         datas = datas[cursor:cursor+ max_heigh - y]
 
         if draw:
+            # import pdb; pdb.set_trace();
             self.draw(datas, screen, y,x , pad_width)
         #self.datas.append("%d, %d, %d, %d" %(y,x, self.height, self.width))
 
@@ -356,81 +407,137 @@ class Stack(EventMix):
         except Exception as e:
             print(go_y)
             raise e
+        # self.pad.addstr(0,0, '.zcompdump-user’s MacBook Pro-5.6.2', curses.A_REVERSE)
         for row, content in enumerate(datas):
+            # with open("/tmp/s", "w") as fp:
+            #     print(content, file=fp)
             if row == self.py and self.focus:
-                msg = content + ' '*  (max_width - len(content) -1 )
-                self.pad.addstr(row,0, msg, curses.A_REVERSE)
+                # import pdb; pdb.set_trace();
+                msg = content + ' '*  (max_width - len(content) -2 )
+                # with open("/tmp/s", "w") as fp:
+                    # print(content, file=fp)
+                M = msg[:max_width -2 ] if len(msg) >= max_width else msg
+                self.pad.addstr(row,0, M.strip(), curses.A_REVERSE)
             else:
-                self.pad.addstr(row,0, content)
+                
+                
+                M = content[:max_width-1] if len(content) >= max_width -1 else content
+                # msgBox(msg="Writing's On The Wall - Sam Smith - James Bond - Spectre - Cover - Let")
+                    # print(self.width)
+                self.pad.addstr(row,0, M.strip())
+                
         self.pad.noutrefresh(0,0,y,x+1, y+len(datas) - 1,x+ max_width -1)
         #time.sleep(0.5)
 
 
-class Tree(Stack):
+class TreeStack(Stack):
 
     l_stack = None
     r_stack = None
     m_stack = None
 
-    def __init__(self, datas, id='middle', **kargs):
+    def __init__(self, datas, id='middle',controller=None, **kargs):
         super().__init__(datas, id=id, **kargs)
-        self.l_stack =  Stack([], id='left')
-        self.r_stack = Stack([], id='right')
-        self.m_stack = self
-    
-
-    def get_parent(self):
-        raise NotImplementedError("")
-    def get_sub(self):
-        raise NotImplementedError("must implement")
-    
-    def update_widgets(self):
-        Application.instance.clear_widget()
-
-        Application.instance.add_widget(self.l_stack, id='left')
-        Application.instance.add_widget(self, id='meddle')
-        Application.instance.add_widget(self.r_stack, id='right')
-
-
+        self.controller = controller
 
 
     @listener('h')
     def left(self):
-        p = self.get_parent()
-        self.m_stack.datas = self.l_stack.datas
-        self.r_stack.datas = self.datas
-        self.l_stack.datas = p
-        if self.ix >= self.height:
-            self.ix = self.height - 1
-
-        self.update_when_cursor_change(self.datas[self.ix], ch="h")
-
-    @listener('l', use=1)
-    def right(self):
-        # invoid right and right and right, 
-        # only right -> id's window
-        
-        self.m_stack.datas = self.r_stack.datas
-        self.l_stack.datas = self.datas
-        self.r_stack.datas = self.get_sub()
-        
-        if self.ix >= self.height:
-            self.ix = self.height - 1
-        self.update_when_cursor_change(self.datas[self.ix], ch="l")
+        self.controller.move_left()
     
+    def update_when_cursor_change(self, item, ch):
+        self.controller.update_when_cursor_change(item, ch)
+
+    @listener('l')
+    def right(self):
+        self.controller.move_right()
+
+class Tree:
+
+    def __init__(self, cursor):
+        self.cursor = cursor
+        self.now = None
+        self.get_tribble()
         
+        
+        
+        
+
+    def get_parent(self, cursor):
+        raise NotImplementedError("")
+    def get_sub(self, cursor):
+        raise NotImplementedError("must implement")
+    
+    def get_current(self, cursor):
+        raise NotImplementedError("must implement")
+    
+    def update_when_cursor_change(self, item, ch):
+        raise NotImplementedError("must implemnt")
+    
+    def get_right_cursor(self):
+        raise NotImplementedError()
+    
+    def get_left_cursor(self):
+        raise NotImplementedError()
+
+    def get_tribble(self):
+        self.l = TreeStack(self.get_parent(self.cursor),controller=self, id='left')
+        self.m = TreeStack(self.get_current(self.cursor), controller=self,id='middle')
+        self.r = TreeStack(self.get_sub(self.cursor), controller=self,id='right')
+        if 'left' not in Application.widgets:
+            Application.instance.add_widget(self.l, id='left', weight=1)
+        else:
+            Application.instance['left'] = self.l
+
+        if 'middle' not in Application.widgets:
+            Application.instance.add_widget(self.m, id='middle', weight=2)
+        else:
+            Application.instance['middle'] = self.m
+        
+        if 'right' not in Application.widgets:
+            Application.instance.add_widget(self.r, id='right', weight=3)
+        else:
+            Application.instance['right'] = self.r
+        
+        Application.instance.refresh(clear=True)
+        Application.Focus("middle")
+        self.now = self.m.datas[self.m.ix]
+        
+
+
+    def move_right(self):
+        self.cursor = self.get_right_cursor()
+        self.get_tribble()
+
+
+    def move_left(self):
+        self.cursor = self.get_left_cursor()
+        self.get_tribble()
+
+
 
 if __name__ =="__main__":
     main = Application()
-    r1 = Stack(["s"+str(i) for i in range(10)], id='1')
+    r1 = Stack(["s"+str(i) for i in range(28)], id='1')
     r2 = Stack(["s2"+str(i) for i in range(10)], id='2')
-    r3 = Stack(["s3"+str(i) for i in range(10)], id='3')
-    r4 = Stack(["s3"+str(i) for i in range(10)], id='4')
-    t= Text(id='text')
-    main.add_widget(r1, weight=0.5)
-    main.add_widget(r2)
-    main.add_widget(r3)
-    main.add_widget(t)
+    # r3 = Stack(["s3"+str(i) for i in range(10)], id='3')
+    # # r4 = Stack(["s3"+str(i) for i in range(10)], id='4')
+    e = Text(id='text')
+    # # main.add_widget(r1, weight=0.5)
+    # # main.add_widget(r2)
+    # # main.add_widget(r3)
+    # # main.add_widget(t)
+    
+    # tl = FileTree(os.listdir(os.path.expanduser("~/")), root_path=os.path.expanduser("~/"), id='left')
+    # tm = FileTree(os.listdir(os.path.expanduser("~/Documents")), path_root=os.path.expanduser("~/Documents"), id='middle')
+    # tr = FileTree([''], id='right')
+
+    # main.add_widget(tl,weight=1)
+    # main.add_widget(tm,weight=2)
+    # main.add_widget(tr,weight=3)
+    
+    main.focus("middle")
+    main.add_widget(e)
     curses.wrapper(main.loop)
 
 
