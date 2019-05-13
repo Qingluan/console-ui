@@ -31,12 +31,28 @@ def infoShow(screen, win):
     ww = win.width
     msgBox(screen, "id:%s yx:%d,%d  py:%d, height:%d, screen_h:%d screen_w:%d cur:%d" % (win.id, cy,cx, win.py, wh, h,ww, win.cursor))
 
+class ColorConfig:
+    config = {
+        'label':1,
+        'normal':2,
+        'spicial':3,
+        'link':4
+    }
+    @classmethod
+    def default(cls):
+        
+        curses.init_pair(cls.config['label'], curses.COLOR_WHITE, curses.COLOR_BLUE)
+        curses.init_pair(cls.config['normal'],curses.COLOR_BLUE , curses.COLOR_BLACK)
+        curses.init_pair(cls.config['link'],curses.COLOR_BLUE , curses.COLOR_BLACK)
+
 
 class Application(EventMix):
     height,width = 0,0
     widgets = {}
+    extra_widgets = []
     instance = None
     editor = None
+    last_focus = None
     top = 0
     def __init__(self, top_margin=1):
         self.border = 1
@@ -120,6 +136,10 @@ class Application(EventMix):
         for widget in self.widgets.values():
             if widget.focus:
                 widget.action_listener(ch)
+        
+        for widget in self.__class__.extra_widgets:
+            if widget.focus:
+                widget.action_listener(ch)
 
         for id, widget in self.widgets.items():
             if isinstance(widget, Text):continue
@@ -135,14 +155,28 @@ class Application(EventMix):
             now_x += pad_width
             if not is_not_first:
                 is_not_first = True
+
+        for widget in self.__class__.extra_widgets:
+            widget.update(self.screen, ch=ch)
+
         if ch:
             self.ready_key(ch)
 
     def focus(self, idx):
         for v in self.widgets.values():
-            v.focux = False
+            v.focus = False
         self.widgets[idx].focus = True
     
+    @classmethod
+    def LossFocus(cls):
+        for i,v in cls.widgets.items():
+            if v.focus: 
+                v.focus = False
+                cls.last_focus = i
+    @classmethod
+    def ResumeFocus(cls):
+        cls.Focus(cls.last_focus)
+
     @classmethod
     def Focus(cls, idx):
         cls.widgets[idx].focus = True
@@ -176,21 +210,19 @@ class Application(EventMix):
         k = 0
         if not self.screen:
             self.screen = stdscr
-
+        curses.curs_set(0)
+        # curses.keypad(1)
         self.refresh(clear=True)
-        # curses.doupdate()
-        #self.screen.move(0,0)
-        # ii = ''
-        # for ki,v in self.widgets.items():
-            # if v.focus == True:
-                # ii = ki
-        c = 0
+        
+        ColorConfig.default()
+        c = -1
         while k != ord('q'):
-            if c == 0:
-                self.refresh(k=k, clear=False)
+            if c == -1:
+                self.refresh(k=k)
                 c  = 1
-            else:
-                self.refresh(k=k, clear=True)
+            # else:
+                # self.refresh(k=k, clear=True)
+            self.refresh(k=k)
             # msgBox(stdscr, "type: %d " % k)
             
             k = self.screen.getch()
@@ -283,7 +315,12 @@ class Stack(EventMix):
         self.px = None
         self.py = None
         self.Spy, self.Spx = None, None
+        self.c_y,self.c_x = None,None
         self.mode = mode
+
+    @property
+    def cursor_yx(self):
+        return self.c_y + self.py, self.c_x
 
     @property
     def width(self):
@@ -346,7 +383,7 @@ class Stack(EventMix):
             else:
                 # msgBox(msg="if")
                 self.cursor += 1
-            infoShow(self.screen, self)
+            # infoShow(self.screen, self)
         elif self.py > sm -1 - top and self.cursor < sm:
             # msgBox(msg='elif')
             if self.height > Application.height:
@@ -358,7 +395,7 @@ class Stack(EventMix):
             infoShow(self.screen, self)
         else:
             # msgBox(msg='else')
-            infoShow(self.screen, self)
+            # infoShow(self.screen, self)
             self.py += 1
             self.screen.move(self.py ,self.px)
             # infoShow(self.screen, self)
@@ -370,64 +407,121 @@ class Stack(EventMix):
     @listener(10)
     def enter(self):
         msgBox(self.screen," hello world")
-        r_x = self.width
-        r_y = self.py
+        # r_x = self.width
+        # r_y = self.py
         text = Application.get_widget_by_id("text")
         if text:
-            text.update(self.screen, pad_width=Application.width -8, pad_height=Application.height//3)
+            text.update(self.screen)
 
 
     def update(self, screen, y, x, pad_width,ch=None, draw=True):
         if not self.screen:
             self.screen = screen
-        max_heigh,max_width = screen.getmaxyx()
+        max_heigh,_ = screen.getmaxyx()
         if self.py is None:
             self.py,self.px = screen.getyx()
             self.Spy, self.Spx = screen.getyx()
         datas = self.datas
-        #if self.focus:
-        #    self.action_listener(ch)
+        
         cursor = self.cursor
         datas = datas[cursor:cursor+ max_heigh - y]
 
         if draw:
-            # import pdb; pdb.set_trace();
             self.draw(datas, screen, y,x , pad_width)
-        #self.datas.append("%d, %d, %d, %d" %(y,x, self.height, self.width))
+        
 
     def draw(self,datas,screen,y,x, max_width):
-        #print("asf")
-        self.pad = curses.newpad(len(datas), max_width)
 
-        #infoShow(screen, self)
-        go_y = self.py if self.py < self.height -1 else self.height -2
-        try:
-            #self.pad.move(go_y,self.px)
-            pass
-        except Exception as e:
-            print(go_y)
-            raise e
-        # self.pad.addstr(0,0, '.zcompdump-user’s MacBook Pro-5.6.2', curses.A_REVERSE)
+        max_h = max(len(datas), Application.height)
+        self.pad = curses.newpad(max_h, max_width)
+        self.c_y, self.c_x = y, x
         for row, content in enumerate(datas):
-            # with open("/tmp/s", "w") as fp:
-            #     print(content, file=fp)
             if row == self.py and self.focus:
-                # import pdb; pdb.set_trace();
-                msg = content + ' '*  (max_width - len(content) -2 )
-                # with open("/tmp/s", "w") as fp:
-                    # print(content, file=fp)
-                M = msg[:max_width -2 ] if len(msg) >= max_width else msg
-                self.pad.addstr(row,0, M.strip(), curses.A_REVERSE)
+                content = content.replace("\n","")
+                msg = content + ' '*  (max_width - len(content) -3)
+                self.pad.addstr(row,1, msg, curses.A_REVERSE | curses.color_pair(ColorConfig.config['label']))
+                self.c_x += 1
             else:
-                
-                
-                M = content[:max_width-1] if len(content) >= max_width -1 else content
-                # msgBox(msg="Writing's On The Wall - Sam Smith - James Bond - Spectre - Cover - Let")
-                    # print(self.width)
-                self.pad.addstr(row,0, M.strip())
-                
+                content = content.replace("\n","")
+                M = content[:max_width-2] if len(content) >= max_width -2 else content
+                self.pad.addstr(row,1, M.strip(), curses.color_pair(ColorConfig.config['normal'] ))
+            
         self.pad.noutrefresh(0,0,y,x+1, y+len(datas) - 1,x+ max_width -1)
         #time.sleep(0.5)
+
+class Menu(Stack):
+    
+    def __init__(self,  datas, id='select', x=None,y=None,mode='chains', max_width=30, **opts):
+        super().__init__(datas, id=id, mode=mode, *opts)
+        if not x:
+            self.x = Application.width // 2 
+        else:
+            self.x = x + 1
+
+        if not y:
+            self.y = Application.height // 2 - self.height // 2
+            if self.y < 0:
+                self.y = 1
+        else:
+            self.y = y
+        if self.y + self.height +3 > Application.height:
+            self.y = Application.height - self.height - 3
+        self.return_item = None
+        self.max_width = max_width
+    
+    def update(self, screen, ch):
+        if not self.screen:
+            self.screen = screen
+        max_heigh,_ = screen.getmaxyx()
+        if self.py is None:
+            self.py,self.px = screen.getyx()
+            self.Spy, self.Spx = screen.getyx()
+        datas = self.datas
+        
+        cursor = self.cursor
+        datas = datas[cursor:cursor+ max_heigh - self.y]
+
+        self.draw(datas, screen,ch)
+
+    @listener(10)
+    def enter(self):
+        self.return_item = self.datas[self.ix]
+        Application.extra_widgets.remove(self)
+        msgBox(msg=self.return_item)
+        Application.instance.refresh(clear=True)
+        Application.ResumeFocus()
+        # Application.instance.refresh()
+
+    def draw(self, datas, screen, ch):
+        max_h = len(datas) + 2
+        max_width = min([max(self.width,self.max_width) + 3, Application.width])
+        
+        self.pad = curses.newpad(max_h, max_width)
+        self.pad.border(0)
+        self.pad.keypad(1)
+        for row, content in enumerate(datas):
+            if row == self.py and self.focus:
+                content = content.replace("\n","")
+                msg = content + ' '*  (max_width - len(content) -3)
+                self.pad.addstr(row+1,1, msg[:-1], curses.A_REVERSE | curses.color_pair(ColorConfig.config['label']))
+                # self.pad.addstr(row+1, 1, "sdd")
+            else:
+                content = content.replace("\n","")
+                M = content[:max_width-2] if len(content) >= max_width -2 else content
+                # self.pad.addstr(row+1, 1, "sdd")
+                self.pad.addstr(row+1,1, M.strip()[:max_width-2], curses.color_pair(ColorConfig.config['normal'] ))
+        msgBox(msg='%d %d ' %(self.y, self.x))
+        self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,self.x+ max_width +1)
+    
+    @classmethod
+    def which_one(cls, datas, y=3 ,x=1 , max_width=30, max_height=10):
+        select = cls(datas, id='select', y=y, x=x, max_width=max_width)
+        Application.LossFocus()
+        select.focus = True
+        Application.extra_widgets.append(select)
+
+
+        return 
 
 
 class TreeStack(Stack):
@@ -459,10 +553,6 @@ class Tree:
         self.now = None
         self.get_tribble()
         
-        
-        
-        
-
     def get_parent(self, cursor):
         raise NotImplementedError("")
     def get_sub(self, cursor):
@@ -515,18 +605,28 @@ class Tree:
         self.get_tribble()
 
 
+class Test(Stack):
+
+    @listener(10)
+    def enter(self):
+        # y,x = self.pad.getyx()
+        y, x = self.cursor_yx
+        y += 1
+        x += 1
+        Menu.which_one(["a", "b", "exit"], y=y,x=x)
 
 if __name__ =="__main__":
     main = Application()
-    r1 = Stack(["s"+str(i) for i in range(28)], id='1')
-    r2 = Stack(["s2"+str(i) for i in range(10)], id='2')
-    # r3 = Stack(["s3"+str(i) for i in range(10)], id='3')
-    # # r4 = Stack(["s3"+str(i) for i in range(10)], id='4')
-    e = Text(id='text')
-    # # main.add_widget(r1, weight=0.5)
-    # # main.add_widget(r2)
-    # # main.add_widget(r3)
-    # # main.add_widget(t)
+    r1 = Test(["s"+str(i) for i in range(138)], id='1')
+    r2 = Test(["s2"+str(i) for i in range(50)], id='2')
+    r3 = Test(["s3"+str(i) for i in range(160)], id='3')
+    r4 = Test(["s3"+str(i) for i in range(70)], id='4')
+    # e = Menu(["a", "b", "c", "exit"], id='s', x=30, y =30)
+    main.add_widget(r1, weight=0.5)
+    main.add_widget(r2)
+    main.add_widget(r3)
+    main.add_widget(r4)
+    # main.add_widget(t)
     
     # tl = FileTree(os.listdir(os.path.expanduser("~/")), root_path=os.path.expanduser("~/"), id='left')
     # tm = FileTree(os.listdir(os.path.expanduser("~/Documents")), path_root=os.path.expanduser("~/Documents"), id='middle')
@@ -536,8 +636,9 @@ if __name__ =="__main__":
     # main.add_widget(tm,weight=2)
     # main.add_widget(tr,weight=3)
     
-    main.focus("middle")
-    main.add_widget(e)
+    
+    # main.add_widget(e)
+    main.focus("1")
     curses.wrapper(main.loop)
 
 

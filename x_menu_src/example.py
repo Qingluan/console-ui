@@ -1,7 +1,7 @@
 import os
 import curses
 from .menu import Tree, Text
-from .menu import msgBox, Application
+from .menu import msgBox, Application, ColorConfig
 
 class FileTree(Tree):
 
@@ -12,7 +12,10 @@ class FileTree(Tree):
     
     def get_right_cursor(self):
         item = self.m.datas[self.m.ix]
-        return os.path.join(self.cursor, item)
+        d = os.path.join(self.cursor, item)
+        if os.path.isdir(d):
+            return d
+        return  self.cursor
   
     def get_parent(self, cursor):
         p = self.get_left_cursor()
@@ -38,6 +41,7 @@ class FileTree(Tree):
 
 if __name__ == "__main__":
     main = Application()
+    
     # r1 = Stack(["s"+str(i) for i in range(28)], id='1')
     # r2 = Stack(["s2"+str(i) for i in range(10)], id='2')
     # r3 = Stack(["s3"+str(i) for i in range(10)], id='3')
@@ -58,6 +62,7 @@ if __name__ == "__main__":
     t = FileTree(os.path.expanduser("~/Documents"))
     main.focus("middle")
     main.add_widget(e)
+    
     curses.wrapper(main.loop)
     curses.endwin()
 
