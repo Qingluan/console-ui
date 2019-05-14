@@ -1,6 +1,7 @@
 import curses
 import os, sys
 from .event import EventMix, listener
+from .log import log
 from curses.textpad import Textbox, rectangle
 import time
 
@@ -351,7 +352,7 @@ class Stack(EventMix):
         self.ix -= 1 
         if self.ix < 0:
             self.ix = 0
-        self.update_when_cursor_change(self.datas[self.ix], ch="k")
+        self.update_when_cursor_change(self.get_text(self.ix), ch="k")
 
     @listener('h')
     def left(self):
@@ -359,7 +360,7 @@ class Stack(EventMix):
             self.focus = False
             self.left_widget.focus = True
             infoShow(self.screen,self.left_widget)
-        self.update_when_cursor_change(self.datas[self.ix], ch="h")
+        self.update_when_cursor_change(self.get_text(self.ix), ch="h")
 
     @listener('l')
     def right(self):
@@ -369,10 +370,11 @@ class Stack(EventMix):
             self.focus = False
             self.right_widget.focus = True
             infoShow(self.screen,self.right_widget)
-        self.update_when_cursor_change(self.datas[self.ix], ch="l")
+        self.update_when_cursor_change(self.get_text(self.ix), ch="l")
 
     @listener("j")
     def down(self):
+        
         sm = min([Application.height, self.height])
         top = Application.top
         if self.py >= Application.height - top -1:
@@ -402,7 +404,7 @@ class Stack(EventMix):
         self.ix += 1 
         if self.ix >= self.height:
             self.ix = self.height - 1 
-        self.update_when_cursor_change(self.datas[self.ix], ch="j")
+        self.update_when_cursor_change(self.get_text(self.ix), ch="j")
     
     @listener(10)
     def enter(self):
@@ -424,18 +426,34 @@ class Stack(EventMix):
         datas = self.datas
         
         cursor = self.cursor
-        datas = datas[cursor:cursor+ max_heigh - y]
+        if isinstance(datas, list):
+        
+            datas = datas[cursor:cursor+ max_heigh - y]
+        else:
+            datas = dict(list(datas.items())[cursor:cursor+ max_heigh - y])
+
 
         if draw:
             self.draw(datas, screen, y,x , pad_width)
-        
+    
+    def on_text(self,msg ,ix):
+        return msg
+
+    def get_text(self, ix, datas=None):
+        if not datas:
+            datas = self.datas
+        if isinstance(datas, dict):
+            return self.on_text(list(datas.keys())[ix], ix)
+        else:
+            return self.on_text(datas[ix], ix)
 
     def draw(self,datas,screen,y,x, max_width):
 
         max_h = max(len(datas), Application.height)
         self.pad = curses.newpad(max_h, max_width)
         self.c_y, self.c_x = y, x
-        for row, content in enumerate(datas):
+        for row in range(len(datas)):
+            content = self.get_text(row, datas=datas)
             if row == self.py and self.focus:
                 content = content.replace("\n","")
                 msg = content + ' '*  (max_width - len(content) -3)
@@ -468,14 +486,18 @@ class Menu(Stack):
             self.y = Application.height - self.height - 3
         self.return_item = None
         self.max_width = max_width
+        # self.py = 0
     
     def update(self, screen, ch):
+        # log(self.pad)
         if not self.screen:
             self.screen = screen
         max_heigh,_ = screen.getmaxyx()
         if self.py is None:
-            self.py,self.px = screen.getyx()
-            self.Spy, self.Spx = screen.getyx()
+            # self.py,self.px = screen.getyx()
+            self.py,self.px = 0,0
+            log(self.id,max_heigh, self.py, self.px)
+            self.Spy, self.Spx = 0,0
         datas = self.datas
         
         cursor = self.cursor
@@ -485,7 +507,7 @@ class Menu(Stack):
 
     @listener(10)
     def enter(self):
-        self.return_item = self.datas[self.ix]
+        self.return_item = self.get_text(self.ix)
         Application.extra_widgets.remove(self)
         msgBox(msg=self.return_item)
         Application.instance.refresh(clear=True)
@@ -499,7 +521,8 @@ class Menu(Stack):
         self.pad = curses.newpad(max_h, max_width)
         self.pad.border(0)
         self.pad.keypad(1)
-        for row, content in enumerate(datas):
+        for row in range(len(datas)):
+            content = self.get_text(row, datas=datas)
             if row == self.py and self.focus:
                 content = content.replace("\n","")
                 msg = content + ' '*  (max_width - len(content) -3)
@@ -510,8 +533,9 @@ class Menu(Stack):
                 M = content[:max_width-2] if len(content) >= max_width -2 else content
                 # self.pad.addstr(row+1, 1, "sdd")
                 self.pad.addstr(row+1,1, M.strip()[:max_width-2], curses.color_pair(ColorConfig.config['normal'] ))
-        msgBox(msg='%d %d ' %(self.y, self.x))
-        self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,self.x+ max_width +1)
+        log('%d %d ' %(self.y, self.x))
+        right_width = min([self.x+ max_width +1,Application.width -1])
+        self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,right_width)
     
     @classmethod
     def which_one(cls, datas, y=3 ,x=1 , max_width=30, max_height=10):
@@ -521,8 +545,9 @@ class Menu(Stack):
         Application.extra_widgets.append(select)
 
 
-        return 
+        return
 
+    
 
 class TreeStack(Stack):
 
@@ -617,7 +642,7 @@ class Test(Stack):
 
 if __name__ =="__main__":
     main = Application()
-    r1 = Test(["s"+str(i) for i in range(138)], id='1')
+    r1 = Test({"s"+str(i):str(i) for i in range(138)}, id='1')
     r2 = Test(["s2"+str(i) for i in range(50)], id='2')
     r3 = Test(["s3"+str(i) for i in range(160)], id='3')
     r4 = Test(["s3"+str(i) for i in range(70)], id='4')
