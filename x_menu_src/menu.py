@@ -395,27 +395,27 @@ class Stack(EventMix):
         return len(self.datas)
 
     def update_when_cursor_change(self, item, ch=None):
-        pass
+        infoShow(self.screen, self)
 
     @listener("k")
     def up(self):
         if self.cursor > 0 and self.py == self.Spy:
             self.cursor -= 1
         elif self.cursor == 0 and self.py == self.Spy:
-            self.py = min([Application.height, self.height]) - 1 - Application.top
+            self.py = min([Application.height - Application.instance.top, self.height]) - 1
             if self.height > Application.height:
-                self.cursor = self.height -  Application.height + Application.top
-            infoShow(self.screen, self)
+                self.cursor = self.height -  Application.height + Application.instance.top
+            # infoShow(self.screen, self)
         else:
             if self.py > 0:
                self.py -= 1
                self.screen.move(self.py ,self.px)
-               infoShow(self.screen, self)
+            #    infoShow(self.screen, self)
 
             #self.py -= 1
         self.ix -= 1 
         if self.ix < 0:
-            self.ix = 0
+            self.ix = self.height - 1
         self.update_when_cursor_change(self.get_text(self.ix), ch="k")
 
     @listener('?')
@@ -429,7 +429,7 @@ class Stack(EventMix):
         if self.left_widget and self.mode == 'chains':
             self.focus = False
             self.left_widget.focus = True
-            infoShow(self.screen,self.left_widget)
+            # infoShow(self.screen,self.left_widget)
         self.update_when_cursor_change(self.get_text(self.ix), ch="h")
 
     @listener('l')
@@ -439,7 +439,7 @@ class Stack(EventMix):
         if self.right_widget and self.mode == 'chains':
             self.focus = False
             self.right_widget.focus = True
-            infoShow(self.screen,self.right_widget)
+            # infoShow(self.screen,self.right_widget)
         self.update_when_cursor_change(self.get_text(self.ix), ch="l")
 
     @listener("j")
@@ -464,7 +464,7 @@ class Stack(EventMix):
                 self.cursor = 0
                 self.py = self.Spy
                 self.ix = 0
-            infoShow(self.screen, self)
+            # infoShow(self.screen, self)
         else:
             # msgBox(msg='else')
             # infoShow(self.screen, self)
