@@ -445,7 +445,7 @@ class Stack(EventMix):
         if isinstance(datas, dict):
             return self.on_text(list(datas.keys())[ix], ix)
         else:
-            return self.on_text(datas[ix], ix)
+            return self.on_text(str(datas[ix]), ix)
 
     def draw(self,datas,screen,y,x, max_width):
 
@@ -623,7 +623,6 @@ class Tree:
     def move_right(self):
         self.cursor = self.get_right_cursor()
         self.get_tribble()
-
 
     def move_left(self):
         self.cursor = self.get_left_cursor()
