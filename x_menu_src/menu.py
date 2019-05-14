@@ -2,6 +2,7 @@ import curses
 import os, sys
 from .event import EventMix, listener
 from .log import log
+from .charactors import SYMBOL
 from curses.textpad import Textbox, rectangle
 import time
 
@@ -10,7 +11,7 @@ def msgBox(screen=None, msg='None'):
     if not screen:
         screen = curses.initscr()
     h,w = screen.getmaxyx()
-    msg = msg + ' ' * (w-len(msg))
+    msg = msg + ' ' * (w-len(msg) -1 )
     screen.addstr(0, 0, msg, curses.A_REVERSE)
 
     #editwin = curses.newwin(5,30, 2,1)
@@ -37,14 +38,21 @@ class ColorConfig:
         'label':1,
         'normal':2,
         'spicial':3,
-        'link':4
+        'link':4,
+        'finish':9,
+        'attrs':5
     }
     @classmethod
     def default(cls):
-        
+        curses.init_pair(cls.config['finish'],curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(cls.config['attrs'],curses.COLOR_YELLOW, curses.COLOR_BLACK)
         curses.init_pair(cls.config['label'], curses.COLOR_WHITE, curses.COLOR_BLUE)
         curses.init_pair(cls.config['normal'],curses.COLOR_BLUE , curses.COLOR_BLACK)
         curses.init_pair(cls.config['link'],curses.COLOR_BLUE , curses.COLOR_BLACK)
+    
+    @classmethod
+    def get(cls, label):
+        return curses.color_pair(cls.config.get(label, 'normal'))
 
 
 class Application(EventMix):
@@ -248,7 +256,7 @@ class _Textbox(Textbox):
 
 class Text(EventMix):
 
-    def __init__(self, id=None, **ops):
+    def __init__(self,content=None,title=None, id=None,y=None,x=None,width=80, **ops):
         self.screen = None
         self.cursor = 0
         self.border = 1
@@ -262,17 +270,54 @@ class Text(EventMix):
         self.px = None
         self.py = None
         self.Spy, self.Spx = None, None
+        self.text = ''
 
-        
-        
-        height, width  =  Application.Size()
-        self.height = height // 3 
-        self.width = width -3
-        
-        self.rect = [self.height * 2 , 0, height-2, width -3]
-        self.loc = [self.height - 3 , self.width -1 , self.height * 2 + 1, 1]
-        self.msg = None
-        self.title = "Ctrl-G to exit "
+        Height, Width  =  Application.Size()
+        if not y or not x:
+            
+            self.height = Height // 3 
+            self.width = Width -3
+            self.rect = [self.height * 2 , 0, Height-2, Width -3]
+            self.loc = [self.height - 3 , self.width -1 , self.height * 2 + 1, 1]
+            self.msg = None
+            self.title = "Ctrl-G to exit "
+        else:
+            if y + width > Width:
+                y = Width - width -3
+            if x + 4 > Height:
+                x = Height - 8
+
+            if width + x >= Width -3:
+                self.width = Width -3 - x
+            else:
+                self.width = width
+            
+            if content:
+                self.text = content
+                # height = len(content) // self.width
+                height = content.count('\n') + 3
+                log('hh', height)
+                if height < 10:
+                    height =10
+            else:
+                height = 10
+            
+            if height + y >= Height -2 :
+                self.height = Height - 2 - y
+            else:
+                self.height = height
+            log('x',x,'heigt:', height, 'self.height', self.height)
+            log('App:', Height, Width)
+            
+            
+            self.rect = [y , x, y + self.height , x + self.width]
+            self.loc = [self.height - 1, self.width -1 , y+1, x +1]
+            self.msg = None
+            self.title = "Ctrl-G to exit " if not title else title
+
+            log('rect:', self.rect)
+                
+
         if not Application.editor:
             Application.editor = self
 
@@ -282,10 +327,17 @@ class Text(EventMix):
         if title:
             self.title = title
         stdscr = self.screen
-        stdscr.addstr(self.rect[0]-1, 0, self.title)
+        msg = ' '+ self.title + (self.width - len(self.title) - 2) * ' ' if self.width - len(self.title) > 2 else self.title
+        stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
         editwin = curses.newwin(*self.loc)
+        curses.curs_set(1)
+        if self.text:
+            for row, l in enumerate(self.text.split("\n")):
+                log('row', row, len(l))
+                editwin.addstr(row,0, l.strip()[:self.width])
         
         rectangle(stdscr, *self.rect)
+        log('self.loc', self.loc, 'self.rect', self.rect)
         stdscr.refresh()
 
         box = _Textbox(editwin)
@@ -295,8 +347,20 @@ class Text(EventMix):
 
         # Get resulting contents
         message = box.gather()
+        curses.curs_set(0)
         self.msg = message
         Application.instance.refresh(clear=True)
+    
+    @classmethod
+    def Popup(cls,context=None, screen=None,title=None, content=None, y=None,x=None, width=80, **opts ):
+        if context:
+            y,x = context.cursor_yx
+            y+=2
+            x+=3
+            screen = context.screen
+        editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, **opts)
+        editor.update(screen, title=title)
+        return editor.msg
 
 
 class Stack(EventMix):
@@ -353,6 +417,12 @@ class Stack(EventMix):
         if self.ix < 0:
             self.ix = 0
         self.update_when_cursor_change(self.get_text(self.ix), ch="k")
+
+    @listener('?')
+    def show_help(self):
+        msg = '\n'.join([ str(chr(k).encode()) + ":" + str(k)+":  "+v for k,v in self.instances.items() if hasattr(self, v) ])
+        Text.Popup(context=self,title='show key to handle, Ctrl+G exit and change keymap',content=msg)
+        
 
     @listener('h')
     def left(self):
@@ -416,13 +486,16 @@ class Stack(EventMix):
             text.update(self.screen)
 
 
-    def update(self, screen, y, x, pad_width,ch=None, draw=True):
+    def update(self, screen, y=None, x=None, pad_width=None,ch=None, draw=True):
         if not self.screen:
             self.screen = screen
         max_heigh,_ = screen.getmaxyx()
         if self.py is None:
-            self.py,self.px = screen.getyx()
-            self.Spy, self.Spx = screen.getyx()
+            # self.py,self.px = screen.getyx()
+            # self.Spy, self.Spx = screen.getyx()
+            self.py,self.px = 0,0
+            # log(self.id,max_heigh, self.py, self.px)
+            self.Spy, self.Spx = 0,0
         datas = self.datas
         
         cursor = self.cursor
@@ -446,6 +519,25 @@ class Stack(EventMix):
             return self.on_text(list(datas.keys())[ix], ix)
         else:
             return self.on_text(str(datas[ix]), ix)
+    
+    def get_now_text(self):
+        if isinstance(self.datas, list):
+            return self.on_text(self.datas[self.ix], self.ix)
+        else:
+            return self.on_text(list(self.datas.keys())[self.ix], self.ix)
+
+    def draw_text(self,row, col, text, attrs=1,prefix='',prefix_attrs=None, mark=False):
+        if mark:
+            attrs |= curses.A_REVERSE
+            # self.pad.addstr(row, col, text,curses.A_REVERSE | attrs )
+        if prefix:
+            if prefix_attrs:
+                self.pad.addstr(row, col, prefix, prefix_attrs)
+            else:
+                self.pad.addstr(row, col, prefix)
+            self.pad.addstr(text, attrs)
+        else:
+            self.pad.addstr(row, col, text, attrs)
 
     def draw(self,datas,screen,y,x, max_width):
 
@@ -457,15 +549,42 @@ class Stack(EventMix):
             if row == self.py and self.focus:
                 content = content.replace("\n","")
                 msg = content + ' '*  (max_width - len(content) -3)
-                self.pad.addstr(row,1, msg, curses.A_REVERSE | curses.color_pair(ColorConfig.config['label']))
+                self.draw_text(row+1,1, msg[:-1],  mark=True)
                 self.c_x += 1
             else:
                 content = content.replace("\n","")
                 M = content[:max_width-2] if len(content) >= max_width -2 else content
-                self.pad.addstr(row,1, M.strip(), curses.color_pair(ColorConfig.config['normal'] ))
+                self.draw_text(row+1,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
             
-        self.pad.noutrefresh(0,0,y,x+1, y+len(datas) - 1,x+ max_width -1)
-        #time.sleep(0.5)
+        self.pad.noutrefresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
+
+    @classmethod
+    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None, exit_key=147, width=30, max_height=10):
+        if context:
+            y,x = context.cursor_yx
+            y+=1
+            x+=1
+            screen = context.screen
+        select = cls(datas, id='unknow')
+        H,W = Application.Size()
+        if y + len(datas) -1 >=  H:
+            y = H - len(datas)
+        if x + width - 1 >= W:
+            x = W - width
+        k = -1
+        select.focus = True
+        msgBox(msg='alt+q to exit')
+        while k != exit_key:
+            select.action_listener(k)
+            select.update(screen, ch=k, y=y, x=x, pad_width=width)
+            select.ready_key(k)
+            screen.refresh()
+            k = screen.getch()
+            log(k)
+            
+        # Application.instance.refresh(clear=True)
+        screen.refresh()
+        return select.get_now_text()
 
 class Menu(Stack):
     
@@ -487,6 +606,7 @@ class Menu(Stack):
         self.return_item = None
         self.max_width = max_width
         # self.py = 0
+        self.target_widget = None
     
     def update(self, screen, ch):
         # log(self.pad)
@@ -496,7 +616,7 @@ class Menu(Stack):
         if self.py is None:
             # self.py,self.px = screen.getyx()
             self.py,self.px = 0,0
-            log(self.id,max_heigh, self.py, self.px)
+            # log(self.id,max_heigh, self.py, self.px)
             self.Spy, self.Spx = 0,0
         datas = self.datas
         
@@ -508,10 +628,13 @@ class Menu(Stack):
     @listener(10)
     def enter(self):
         self.return_item = self.get_text(self.ix)
+        if self.target_widget:
+            self.target_widget.callback_value = self.return_item
         Application.extra_widgets.remove(self)
-        msgBox(msg=self.return_item)
+        # msgBox(msg=self.return_item)
         Application.instance.refresh(clear=True)
         Application.ResumeFocus()
+
         # Application.instance.refresh()
 
     def draw(self, datas, screen, ch):
@@ -526,13 +649,13 @@ class Menu(Stack):
             if row == self.py and self.focus:
                 content = content.replace("\n","")
                 msg = content + ' '*  (max_width - len(content) -3)
-                self.pad.addstr(row+1,1, msg[:-1], curses.A_REVERSE | curses.color_pair(ColorConfig.config['label']))
+                self.draw_text(row+1,1, msg[:-1],  mark=True)
                 # self.pad.addstr(row+1, 1, "sdd")
             else:
                 content = content.replace("\n","")
                 M = content[:max_width-2] if len(content) >= max_width -2 else content
                 # self.pad.addstr(row+1, 1, "sdd")
-                self.pad.addstr(row+1,1, M.strip()[:max_width-2], curses.color_pair(ColorConfig.config['normal'] ))
+                self.draw_text(row+1,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
         log('%d %d ' %(self.y, self.x))
         right_width = min([self.x+ max_width +1,Application.width -1])
         self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,right_width)
@@ -543,9 +666,27 @@ class Menu(Stack):
         Application.LossFocus()
         select.focus = True
         Application.extra_widgets.append(select)
+    
+    @classmethod
+    def Popup(cls, datas=None, context=None, screen=None, y=None ,x=None ,exit_key=10, width=30, max_height=10):
+        if context:
+            y,x = context.cursor_yx
+            y+=1
+            x+=1
+            screen = context.screen
+        
+        select = cls(datas, id='select',  y=y, x=x, max_width=width)
+        k = 0
+        select.focus = True
+        while k != exit_key:
+            select.action_listener(k)
+            select.update(screen, k)
+            select.ready_key(k)
+            screen.refresh()
+            k = screen.getch()
+        Application.instance.refresh(clear=True)
+        return select.get_now_text()
 
-
-        return
 
     
 
@@ -629,41 +770,53 @@ class Tree:
         self.get_tribble()
 
 
-class Test(Stack):
+class CheckBox(Stack):
 
-    @listener(10)
-    def enter(self):
-        # y,x = self.pad.getyx()
-        y, x = self.cursor_yx
-        y += 1
-        x += 1
-        Menu.which_one(["a", "b", "exit"], y=y,x=x)
+    comments = {}
 
-if __name__ =="__main__":
-    main = Application()
-    r1 = Test({"s"+str(i):str(i) for i in range(138)}, id='1')
-    r2 = Test(["s2"+str(i) for i in range(50)], id='2')
-    r3 = Test(["s3"+str(i) for i in range(160)], id='3')
-    r4 = Test(["s3"+str(i) for i in range(70)], id='4')
-    # e = Menu(["a", "b", "c", "exit"], id='s', x=30, y =30)
-    main.add_widget(r1, weight=0.5)
-    main.add_widget(r2)
-    main.add_widget(r3)
-    main.add_widget(r4)
-    # main.add_widget(t)
+    @property
+    def width(self):
+        return super().width + 3
     
-    # tl = FileTree(os.listdir(os.path.expanduser("~/")), root_path=os.path.expanduser("~/"), id='left')
-    # tm = FileTree(os.listdir(os.path.expanduser("~/Documents")), path_root=os.path.expanduser("~/Documents"), id='middle')
-    # tr = FileTree([''], id='right')
-
-    # main.add_widget(tl,weight=1)
-    # main.add_widget(tm,weight=2)
-    # main.add_widget(tr,weight=3)
+    @listener(32)
+    def space_to_change_staus(self):
+        if isinstance(self.datas,dict):
+            msg = self.get_now_text()[4:]
+            log(msg)
+            if self.datas.get(msg):
+                self.datas[msg] = False
+            else:
+                self.datas[msg] = True
     
-    
-    # main.add_widget(e)
-    main.focus("1")
-    curses.wrapper(main.loop)
+    @listener('c')
+    def rw_comment(self):
+        txt = self.get_now_text()[4:]
+        if txt not in self.comments:
+            self.comments[txt] = ''
+        new_comment = Text.Popup(context=self, title='comment ctrl+g exit', content=self.comments[txt])
+        self.comments[txt] = new_comment
 
+    def on_text(self, msg, ix):
+        if isinstance(self.datas,dict):
+            if self.datas.get(msg):
+                return '[%s] '% SYMBOL['bear'] + msg
+            else:
+                return '[%s] ' % SYMBOL['wait'] + msg
+        return msg
+    
+    def draw_text(self,row, col, text, attrs=1, mark=False):
+        
+        if self.datas.get(text[4:].strip()):
+            self.pad.addstr(row, col, text[:4], ColorConfig.get('finish') | curses.A_BOLD)
+            attrs =  ColorConfig.get('finish') | curses.A_UNDERLINE
+        else:
+            self.pad.addstr(row, col, text[:4],  curses.A_BOLD)
+            
+        if self.comments.get(text[4:].strip()):
+            attrs = ColorConfig.get('attrs')
+        if mark:
+            attrs |= curses.A_REVERSE
+        
+        self.pad.addstr(text[4:], attrs )
 
 

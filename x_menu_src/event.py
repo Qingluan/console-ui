@@ -13,7 +13,10 @@ class EventMix:
     def action_listener(self, ch, *args, callback = None, **kargs):
         fn = EventMix.instances.get(ch, '')
         if fn:
-            f = getattr(self, fn)
+            if hasattr(self, fn):
+                f = getattr(self, fn)
+            else:
+                return
         else:
             return
 
