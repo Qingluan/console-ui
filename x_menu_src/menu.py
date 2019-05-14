@@ -137,7 +137,7 @@ class Application(EventMix):
         del self.__class__.widgets[id]
 
 
-    def update_all(self, top=2,ch=None):
+    def update_all(self, top=1,ch=None):
         height, width = self.size
         width_weight = self.weight
         now_x = 0
@@ -380,7 +380,7 @@ class Stack(EventMix):
         self.px = None
         self.py = None
         self.Spy, self.Spx = None, None
-        self.c_y,self.c_x = None,None
+        self.c_y,self.c_x = 0,0
         self.mode = mode
 
     @property
@@ -497,7 +497,7 @@ class Stack(EventMix):
             # log(self.id,max_heigh, self.py, self.px)
             self.Spy, self.Spx = 0,0
         datas = self.datas
-        
+        # log('y',y)
         cursor = self.cursor
         if isinstance(datas, list):
         
@@ -549,12 +549,12 @@ class Stack(EventMix):
             if row == self.py and self.focus:
                 content = content.replace("\n","")
                 msg = content + ' '*  (max_width - len(content) -3)
-                self.draw_text(row+1,1, msg[:-1],  mark=True)
+                self.draw_text(row,1, msg[:-1],  mark=True)
                 self.c_x += 1
             else:
                 content = content.replace("\n","")
                 M = content[:max_width-2] if len(content) >= max_width -2 else content
-                self.draw_text(row+1,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
+                self.draw_text(row,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
             
         self.pad.noutrefresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
 
