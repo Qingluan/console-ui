@@ -20,7 +20,7 @@ def infoShow(screen, win):
     h,w = screen.getmaxyx()
     wh = win.height
     ww = win.width
-    msgBox(screen, "id:%s yx:%d,%d  py:%d, height:%d, screen_h:%d screen_w:%d cur:%d" % (win.id, cy,cx, win.py, wh, h,ww, win.cursor))
+    msgBox(screen, "id:%s yx:%d,%d ix:%d  py:%d, height:%d, screen_h:%d screen_w:%d cur:%d" % (win.id, cy,cx, win.ix, win.py, wh, h,ww, win.cursor))
 
 class ColorConfig:
     config = {
@@ -51,7 +51,8 @@ class Application(EventMix):
     instance = None
     editor = None
     last_focus = None
-    top = 0
+    init_screen = None
+    top = 1
     def __init__(self, top_margin=1):
         self.border = 1
         self.borders = []
@@ -77,8 +78,11 @@ class Application(EventMix):
     
     @classmethod
     def Size(cls):
-        screen = curses.initscr()
-        Application.height, Application.width = screen.getmaxyx()
+        if cls.init_screen is None:
+            cls.init_screen = curses.initscr()
+            curses.start_color()
+            ColorConfig.default()
+        Application.height, Application.width = cls.init_screen.getmaxyx()
         return Application.height, Application.width
 
 
@@ -270,15 +274,17 @@ class Text(EventMix):
             self.msg = None
             self.title = "Ctrl-G to exit "
         else:
-            if y + width > Width:
-                y = Width - width -3
-            if x + 4 > Height:
-                x = Height - 8
+            if x + width > Width:
+                x = Width - width -3
+            if y + 4 > Height:
+                y = Height - 8
 
             if width + x >= Width -3:
                 self.width = Width -3 - x
             else:
                 self.width = width
+            
+
             
             if content:
                 self.text = content
@@ -290,8 +296,10 @@ class Text(EventMix):
             else:
                 height = 10
             
-            if height + y >= Height -2 :
-                self.height = Height - 2 - y
+            if height + y >= Height -3 :
+                # self.height = Height - 2 - y
+                y = Height -3 - height
+                self.height = height
             else:
                 self.height = height
             log('x',x,'heigt:', height, 'self.height', self.height)
@@ -317,6 +325,7 @@ class Text(EventMix):
         stdscr = self.screen
         msg = ' '+ self.title + (self.width - len(self.title) - 2) * ' ' if self.width - len(self.title) > 2 else self.title
         stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
+        log('self.loc', self.loc)
         editwin = curses.newwin(*self.loc)
         curses.curs_set(1)
         if self.text:
@@ -353,11 +362,11 @@ class Text(EventMix):
 
 class Stack(EventMix):
 
-    def __init__(self, datas,id=None,mode='chains', **opts):
+    def __init__(self, datas,id=None,mode='chains',border_len=1, **opts):
         self.screen = None
         self.datas = datas
         self.cursor = 0
-        self.border = 1
+
         self.focus = False
         self.left_widget = None
         self.right_widget = None
@@ -370,7 +379,7 @@ class Stack(EventMix):
         self.Spy, self.Spx = None, None
         self.c_y,self.c_x = 0,0
         self.mode = mode
-
+        self.border_len = border_len
     @property
     def cursor_yx(self):
         return self.c_y + self.py, self.c_x
@@ -390,9 +399,13 @@ class Stack(EventMix):
         if self.cursor > 0 and self.py == self.Spy:
             self.cursor -= 1
         elif self.cursor == 0 and self.py == self.Spy:
-            self.py = min([Application.height - Application.instance.top, self.height]) - 1
+            if Application.instance:
+                self.py = min([Application.height - Application.instance.top - self.border_len *2  , self.height ]) - 1
+            else:
+                self.py = min([Application.height - Application.top - self.border_len * 2 , self.height]) - 1
             if self.height > Application.height:
-                self.cursor = self.height -  Application.height + Application.instance.top
+                self.cursor = self.height -  Application.height + Application.instance.top + self.border_len * 2
+                # self.py += self.border_len * 2 -1
             # infoShow(self.screen, self)
         else:
             if self.py > 0:
@@ -434,8 +447,8 @@ class Stack(EventMix):
     def down(self):
         
         sm = min([Application.height, self.height])
-        top = Application.top
-        if self.py >= Application.height - top -1:
+        top = Application.top if not Application.instance else Application.instance.top
+        if self.py >= Application.height - top -1 - self.border_len*2:
             if self.py + self.cursor >= self.height -1 :
                 self.cursor = 0
                 self.py = self.Spy
@@ -443,11 +456,13 @@ class Stack(EventMix):
             else:
                 # msgBox(msg="if")
                 self.cursor += 1
+                self.ix += 1
             # infoShow(self.screen, self)
         elif self.py > sm -1 - top and self.cursor < sm:
             # msgBox(msg='elif')
             if self.height > Application.height:
                 self.cursor += 1
+                self.ix += 1
             else:
                 self.cursor = 0
                 self.py = self.Spy
@@ -458,10 +473,13 @@ class Stack(EventMix):
             # infoShow(self.screen, self)
             self.py += 1
             self.screen.move(self.py ,self.px)
+            self.ix += 1
             # infoShow(self.screen, self)
-        self.ix += 1 
-        if self.ix >= self.height:
-            self.ix = self.height - 1 
+        # self.ix += 1 
+        if self.ix >= self.height - 1:
+            self.ix = 0
+        
+            
         self.update_when_cursor_change(self.get_text(self.ix), ch="j")
     
     @listener(10)
@@ -474,10 +492,10 @@ class Stack(EventMix):
             text.update(self.screen)
 
 
-    def update(self, screen, y=None, x=None, pad_width=None,ch=None, draw=True):
+    def update(self, screen, y=None, x=None, pad_width=None,ch=None, draw=True,refresh=False):
         if not self.screen:
             self.screen = screen
-        max_heigh,_ = screen.getmaxyx()
+        max_heigh,_ = Application.Size()
         if self.py is None:
             # self.py,self.px = screen.getyx()
             # self.Spy, self.Spx = screen.getyx()
@@ -489,13 +507,13 @@ class Stack(EventMix):
         cursor = self.cursor
         if isinstance(datas, list):
         
-            datas = datas[cursor:cursor+ max_heigh - y]
+            datas = datas[cursor:cursor+ max_heigh - y - self.border_len]
         else:
-            datas = dict(list(datas.items())[cursor:cursor+ max_heigh - y])
+            datas = dict(list(datas.items())[cursor:cursor+ max_heigh - y - self.border_len ])
 
 
         if draw:
-            self.draw(datas, screen, y,x , pad_width)
+            self.draw(datas, screen, y,x , pad_width, refresh=refresh)
     
     def on_text(self,msg ,ix):
         return msg
@@ -514,7 +532,7 @@ class Stack(EventMix):
         else:
             return self.on_text(list(self.datas.keys())[self.ix], self.ix)
 
-    def draw_text(self,row, col, text, attrs=1,prefix='',prefix_attrs=None, mark=False):
+    def draw_text(self,row, col, text,max_width=None, attrs=1,prefix='',prefix_attrs=None, mark=False):
         if mark:
             attrs |= curses.A_REVERSE
             # self.pad.addstr(row, col, text,curses.A_REVERSE | attrs )
@@ -523,28 +541,54 @@ class Stack(EventMix):
                 self.pad.addstr(row, col, prefix, prefix_attrs)
             else:
                 self.pad.addstr(row, col, prefix)
+            text = self.padding_space(text, max_width, mark=mark)
             self.pad.addstr(text, attrs)
         else:
+            text = self.padding_space(text, max_width, mark=mark)
             self.pad.addstr(row, col, text, attrs)
-
-    def draw(self,datas,screen,y,x, max_width):
-
-        max_h = max(len(datas), Application.height)
+    
+    def padding_space(self, content, max_width, mark=False, direct='r'):
+        content = content.replace("\n","")
+        content = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
+        if mark:
+            if direct == 'r':
+                msg = content + ' '*  (max_width - len(content.encode()) -3)
+            else:
+                msg =  ' '*  (max_width - len(content.encode()) -3) + content
+        else:
+            if direct != 'r': 
+                msg =  ' '*  (max_width - len(content.encode()) -3) + content
+            else:
+                msg = content
+        return msg[:-1]
+    
+    def draw(self,datas,screen,y,x, max_width,refresh=False):
+        border_len = self.border_len
+        max_h = min(len(datas) + border_len *2 , Application.height - border_len)
+        
         self.pad = curses.newpad(max_h, max_width)
         self.c_y, self.c_x = y, x
+        
+        # if self.py == 0:
+        #     self.py += border_len
         for row in range(len(datas)):
             content = self.get_text(row, datas=datas)
             if row == self.py and self.focus:
-                content = content.replace("\n","")
-                msg = content + ' '*  (max_width - len(content.encode()) -3)
-                self.draw_text(row,1, msg[:-1],  mark=True)
+                self.draw_text(row + border_len ,1, content,max_width=max_width,  mark=True)
                 self.c_x += 1
             else:
-                content = content.replace("\n","")
-                M = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
-                self.draw_text(row,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
-            
-        self.pad.noutrefresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
+                
+                self.draw_text(row + border_len,1, content, max_width=max_width, attrs=ColorConfig.get('normal'))
+        
+        # rectangle(screen, y,x, y + len(datas) -1 , x+ max_width -1)
+        if self.border_len > 0:
+            self.pad.border(0)
+        # self.pad.refresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
+        if refresh:
+            self.pad.refresh(0,0,y,x, y+max_h -2,x+ max_width -1)
+        else:
+            self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
+        
 
     @classmethod
     def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None, exit_key=147, width=30, max_height=10):
@@ -562,17 +606,27 @@ class Stack(EventMix):
         k = -1
         select.focus = True
         msgBox(msg='alt+q to exit')
+        if not  hasattr(screen, 'refresh'):
+            screen = Application.init_screen
         while k != exit_key:
             select.action_listener(k)
-            select.update(screen, ch=k, y=y, x=x, pad_width=width)
+            select.update(screen, ch=k, y=y, x=x, pad_width=width, refresh=True)
             select.ready_key(k)
-            screen.refresh()
+            
+            # screen.refresh()
+            # select.pad.refresh()
             k = screen.getch()
             log(k)
             
         # Application.instance.refresh(clear=True)
         screen.refresh()
         return select.get_now_text()
+
+class TextPanel(Stack):
+    def __init__(self, text, id=None,*args, **opts):
+        datas = text.split('\n')
+        super().__init__(datas, id=id, *args, **opts)
+    
 
 class Menu(Stack):
     
@@ -637,11 +691,11 @@ class Menu(Stack):
             if row == self.py and self.focus:
                 content = content.replace("\n","")
                 msg = content + ' '*  (max_width - len(content.encode()) -3)
-                self.draw_text(row+1,1, msg[:-1],  mark=True)
+                self.draw_text(row+1,1, msg[:-1], max_width=max_width, mark=True)
             else:
                 content = content.replace("\n","")
                 M = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
-                self.draw_text(row+1,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
+                self.draw_text(row+1,1, M.strip()[:max_width-2], max_width=max_width, attrs=ColorConfig.get('normal'))
         log('%d %d ' %(self.y, self.x))
         right_width = min([self.x+ max_width +1,Application.width -1])
         self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,right_width)
@@ -672,8 +726,6 @@ class Menu(Stack):
             k = screen.getch()
         Application.instance.refresh(clear=True)
         return select.get_now_text()
-
-
     
 
 class TreeStack(Stack):
@@ -790,11 +842,11 @@ class CheckBox(Stack):
                 return '[%s] ' % SYMBOL['wait'] + msg
         return msg
     
-    def draw_text(self,row, col, text, attrs=1, mark=False):
+    def draw_text(self,row, col, text, attrs=1,max_width=None, mark=False):
         
         if self.datas.get(text[4:].strip()):
             self.pad.addstr(row, col, text[:4], ColorConfig.get('finish') | curses.A_BOLD)
-            attrs =  ColorConfig.get('finish') | curses.A_UNDERLINE
+            attrs =  ColorConfig.get('finish') #| curses.A_UNDERLINE
         else:
             self.pad.addstr(row, col, text[:4],  curses.A_BOLD)
             
@@ -802,6 +854,7 @@ class CheckBox(Stack):
             attrs = ColorConfig.get('attrs')
         if mark:
             attrs |= curses.A_REVERSE
-        self.pad.addstr(text[4:], attrs )
+        msg = self.padding_space(text[4:], max_width-3, mark=mark, direct='l')
+        self.pad.addstr(msg, attrs )
 
 
