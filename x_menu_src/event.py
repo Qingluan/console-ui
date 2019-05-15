@@ -50,6 +50,12 @@ class EventMix:
             EventMix._counter[ch]= 0
         else:
             EventMix._counter[ord(ch)]= 0
+    
+    @classmethod
+    def run_background(cls, func, *args,callback=None, **kargs):
+        res = cls._background.submit(func, *args, **kargs)
+        if callback:
+            res.add_done_callback(lambda x: callback(*x.result()))
             
 
  

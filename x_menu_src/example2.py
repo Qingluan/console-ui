@@ -47,7 +47,7 @@ class Test(Stack):
 
         res = TextPanel.Popup(T, context=self)
         msgBox(msg=res)
-    
+
     @listener('i')
     def info_item(self):
         Text.Popup(content="this is a test !!!",context=self, width=40)

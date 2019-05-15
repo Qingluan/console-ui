@@ -591,10 +591,11 @@ class Stack(EventMix):
             self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
         else:
             self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
-        
+    
+    
 
     @classmethod
-    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None, exit_key=147, width=30, max_height=10):
+    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True, max_height=10, exit_key=147, width=30):
         if context:
             y,x = context.cursor_yx
             y+=1
@@ -611,19 +612,24 @@ class Stack(EventMix):
         msgBox(msg='alt+q to exit')
         if not  hasattr(screen, 'refresh'):
             screen = Application.init_screen
-        while k != exit_key:
-            select.action_listener(k)
+        if focus:
+            while k != exit_key:
+                select.action_listener(k)
+                select.update(screen, ch=k, y=y, x=x+2, pad_width=width,pad_height=max_height, refresh=True)
+                select.ready_key(k)
+                
+                # screen.refresh()
+                # select.pad.refresh()
+                k = screen.getch()
+                log(k)
+                
+            # Application.instance.refresh(clear=True)
+            screen.refresh()
+            return select.get_now_text()
+        else:
             select.update(screen, ch=k, y=y, x=x+2, pad_width=width,pad_height=max_height, refresh=True)
-            select.ready_key(k)
-            
             # screen.refresh()
-            # select.pad.refresh()
-            k = screen.getch()
-            log(k)
-            
-        # Application.instance.refresh(clear=True)
-        screen.refresh()
-        return select.get_now_text()
+
 
 class TextPanel(Stack):
     def __init__(self, text, id=None,max_width=None,*args, **opts):
@@ -684,6 +690,27 @@ class TextPanel(Stack):
                 else:
                     self.py += 1
     
+        
+    def update_when_cursor_change(self, item, ch=None):
+        word = item.split()
+        if word:
+            px = self.px
+            if self.px >= len(word):
+                px = len(word) - 1
+            if px >= 0:
+                self.px = px
+                word = word[px]
+            else:
+                return
+        else:
+            return
+        if len(word) > 0:
+            # Application.init_screen.refresh()
+            self.__class__.RunShell("date; echo %s " % word, self, w_pad=self.width)
+    # @listener('t')
+    # def trans(self):
+        # word = self.datas[self.ix].split()[self.px]
+        # self.__class__.RunShell(" trans -x 'localhost:8123' :zh '%s' " % word, self, w_pad=self.width)
 
     def draw_text(self,row, col, text,max_width=None, attrs=1,prefix='',prefix_attrs=None, mark=False):
         words = text.split()
@@ -710,10 +737,18 @@ class TextPanel(Stack):
                 self.pad.addstr(row, w_now, word, m)
             w_now += (len(word) + 1) 
             no += 1
-                
 
     @classmethod
-    def Popup(cls,text,context=None, screen=None, y=None ,x=None, exit_key=147, width=50, max_height=30):
+    def RunShell(cls, cmd, context, w_pad=20, max_h=15):
+        def cmder(cmd, y,x,screen):
+            return os.popen(cmd).read(),None,screen ,y,x, False,max_h
+        y,x = context.start_y, context.start_x
+        y += 1
+        x += w_pad
+        cls.run_background(cmder, cmd,y, x, context.screen, callback=cls.Popup)
+
+    @classmethod
+    def Popup(cls,text,context=None, screen=None, y=None ,x=None,focus=True,  max_height=30,exit_keys=[147],width=50):
         if context:
             y,x = context.cursor_yx
             y+=1
@@ -732,20 +767,25 @@ class TextPanel(Stack):
         if not  hasattr(screen, 'refresh'):
             screen = Application.init_screen
         log('y/x',y,x)
-        while k != exit_key:
-            select.action_listener(k)
+        if focus:
+            while k not in exit_keys:
+                select.action_listener(k)
+                select.update(screen, ch=k, y=y, x=x+2, pad_width=width, pad_height=max_height,refresh=True)
+                screen.addstr(select.start_y,x+4, '%.1f%% ' % (select.ix / select.height * 100 ))
+                select.ready_key(k)
+                
+                # screen.refresh()
+                # select.pad.refresh()
+                k = screen.getch()
+                log(k)
+                
+            # Application.instance.refresh(clear=True)
+            screen.refresh()
+            return select.get_now_text()
+        else:
             select.update(screen, ch=k, y=y, x=x+2, pad_width=width, pad_height=max_height,refresh=True)
-            screen.addstr(select.start_y,x+4, '%.1f%% ' % (select.ix / select.height * 100 ))
-            select.ready_key(k)
+            screen.refresh()
             
-            # screen.refresh()
-            # select.pad.refresh()
-            k = screen.getch()
-            log(k)
-            
-        # Application.instance.refresh(clear=True)
-        screen.refresh()
-        return select.get_now_text()
     
 
 class Menu(Stack):
