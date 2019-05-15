@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='x_menu',
-    version='0.0.2',
+    version='0.0.3',
     description='api for console ui',
     url='https://github.com/Qingluan/console-ui.git',
     author='auth',

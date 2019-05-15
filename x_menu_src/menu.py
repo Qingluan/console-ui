@@ -10,21 +10,10 @@ import time
 def msgBox(screen=None, msg='None'):
     if not screen:
         screen = curses.initscr()
-    h,w = screen.getmaxyx()
+    _,w = screen.getmaxyx()
     msg = msg + ' ' * (w-len(msg) -1 )
     screen.addstr(0, 0, msg, curses.A_REVERSE)
-
-    #editwin = curses.newwin(5,30, 2,1)
-    #rectangle(stdscr, 1,0, 1+5+1, 1+30+1)
     screen.refresh()
-
-    #box = Textbox(editwin)
-
-    # Let the user edit until Ctrl-G is struck.
-    #box.edit()
-
-    # Get resulting contents
-    #message = box.gather()
 
 def infoShow(screen, win):
     cy,cx = screen.getyx()
@@ -138,7 +127,6 @@ class Application(EventMix):
 
 
     def update_all(self, top=1,ch=None):
-        height, width = self.size
         width_weight = self.weight
         now_x = 0
         is_not_first = False
@@ -196,7 +184,7 @@ class Application(EventMix):
             pass
 
     def draw_border(self, y ,x):
-        h,w = self.size
+        h,_ = self.size
         for r in range(self.top,h):
             self.screen.addch(r,x-1, ord('|'))
 
@@ -389,7 +377,7 @@ class Stack(EventMix):
 
     @property
     def width(self):
-        return max([len(i) for i in self.datas])
+        return max([len(i.encode()) for i in self.datas])
     @property
     def height(self):
         return len(self.datas)
@@ -548,12 +536,12 @@ class Stack(EventMix):
             content = self.get_text(row, datas=datas)
             if row == self.py and self.focus:
                 content = content.replace("\n","")
-                msg = content + ' '*  (max_width - len(content) -3)
+                msg = content + ' '*  (max_width - len(content.encode()) -3)
                 self.draw_text(row,1, msg[:-1],  mark=True)
                 self.c_x += 1
             else:
                 content = content.replace("\n","")
-                M = content[:max_width-2] if len(content) >= max_width -2 else content
+                M = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
                 self.draw_text(row,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
             
         self.pad.noutrefresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
@@ -648,13 +636,11 @@ class Menu(Stack):
             content = self.get_text(row, datas=datas)
             if row == self.py and self.focus:
                 content = content.replace("\n","")
-                msg = content + ' '*  (max_width - len(content) -3)
+                msg = content + ' '*  (max_width - len(content.encode()) -3)
                 self.draw_text(row+1,1, msg[:-1],  mark=True)
-                # self.pad.addstr(row+1, 1, "sdd")
             else:
                 content = content.replace("\n","")
-                M = content[:max_width-2] if len(content) >= max_width -2 else content
-                # self.pad.addstr(row+1, 1, "sdd")
+                M = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
                 self.draw_text(row+1,1, M.strip()[:max_width-2], attrs=ColorConfig.get('normal'))
         log('%d %d ' %(self.y, self.x))
         right_width = min([self.x+ max_width +1,Application.width -1])
@@ -816,7 +802,6 @@ class CheckBox(Stack):
             attrs = ColorConfig.get('attrs')
         if mark:
             attrs |= curses.A_REVERSE
-        
         self.pad.addstr(text[4:], attrs )
 
 
