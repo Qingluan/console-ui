@@ -1,11 +1,51 @@
 import curses
-from .menu import Application, Stack, CheckBox, msgBox, Text, Menu
+from .menu import Application, Stack, CheckBox, msgBox, Text, Menu, TextPanel
 from .event import listener
+T = """
+The Zen of Python, by Tim Peters
+
+Beautiful is better than ugly.
+Explicit is better than implicit.
+Simple is better than complex.
+Complex is better than complicated.
+Flat is better than nested.
+Sparse is better than dense.
+Readability counts.
+Special cases aren't special enough to break the rules.
+Although practicality beats purity.
+Errors should never pass silently.
+Unless explicitly silenced.
+In the face of ambiguity, refuse the temptation to guess.
+There should be one-- and preferably only one --obvious way to do it.
+Although that way may not be obvious at first unless you're Dutch.
+Now is better than never.
+Although practicality beats purity.
+Errors should never pass silently.
+Unless explicitly silenced.
+In the face of ambiguity, refuse the temptation to guess.
+There should be one-- and preferably only one --obvious way to do it.
+Although that way may not be obvious at first unless you're Dutch.
+Now is better than never.
+In the face of ambiguity, refuse the temptation to guess.
+There should be one-- and preferably only one --obvious way to do it.
+Although that way may not be obvious at first unless you're Dutch.
+Now is better than never.
+Although never is often better than *right* now.
+If the implementation is hard to explain, it's a bad idea.
+If the implementation is easy to explain, it may be a good idea.
+Namespaces are one honking great idea -- let's do more of those!
+Although never is often better than *right* now.
+If the implementation is hard to explain, it's a bad idea.
+If the implementation is easy to explain, it may be a good idea.
+Namespaces are one honking great idea -- let's do more of those!"""
+
 class Test(Stack):
 
     @listener(10)
     def enter(self):
-        res = Menu.Popup(["hello", "world", "这个是什么时代的啊啊啊啊","exit"], context=self)
+        # res = Test.Popup(["hello", "world","more power","awsl", "这个是什么时代的啊啊啊啊","exit"], context=self, exit_key=147)
+
+        res = TextPanel.Popup(T, context=self)
         msgBox(msg=res)
     
     @listener('i')

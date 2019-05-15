@@ -380,6 +380,9 @@ class Stack(EventMix):
         self.c_y,self.c_x = 0,0
         self.mode = mode
         self.border_len = border_len
+        self.start_y,self.start_x = 0,0
+        self.end_y = 0
+
     @property
     def cursor_yx(self):
         return self.c_y + self.py, self.c_x
@@ -399,12 +402,9 @@ class Stack(EventMix):
         if self.cursor > 0 and self.py == self.Spy:
             self.cursor -= 1
         elif self.cursor == 0 and self.py == self.Spy:
-            if Application.instance:
-                self.py = min([Application.height - Application.instance.top - self.border_len *2  , self.height ]) - 1
-            else:
-                self.py = min([Application.height - Application.top - self.border_len * 2 , self.height]) - 1
+            self.py = self.end_y - self.border_len * 2 - self.start_y - 1 
             if self.height > Application.height:
-                self.cursor = self.height -  Application.height + Application.instance.top + self.border_len * 2
+                self.cursor = self.height -  self.end_y + self.start_y + self.border_len * 2
                 # self.py += self.border_len * 2 -1
             # infoShow(self.screen, self)
         else:
@@ -446,9 +446,8 @@ class Stack(EventMix):
     @listener("j")
     def down(self):
         
-        sm = min([Application.height, self.height])
-        top = Application.top if not Application.instance else Application.instance.top
-        if self.py >= Application.height - top -1 - self.border_len*2:
+        sm = self.end_y
+        if self.py >= self.end_y - self.start_y  - self.border_len*2 - 1:
             if self.py + self.cursor >= self.height -1 :
                 self.cursor = 0
                 self.py = self.Spy
@@ -458,9 +457,9 @@ class Stack(EventMix):
                 self.cursor += 1
                 self.ix += 1
             # infoShow(self.screen, self)
-        elif self.py > sm -1 - top and self.cursor < sm:
+        elif self.py > sm -1 - self.start_y and self.cursor < sm:
             # msgBox(msg='elif')
-            if self.height > Application.height:
+            if self.height > self.end_y:
                 self.cursor += 1
                 self.ix += 1
             else:
@@ -492,10 +491,15 @@ class Stack(EventMix):
             text.update(self.screen)
 
 
-    def update(self, screen, y=None, x=None, pad_width=None,ch=None, draw=True,refresh=False):
+    def update(self, screen, y=None, x=None, pad_width=None,pad_height=None,ch=None, draw=True,refresh=False):
         if not self.screen:
             self.screen = screen
+        self.start_y,self.start_x = y,x
         max_heigh,_ = Application.Size()
+        if pad_height:
+            max_heigh = min([max_heigh, y + pad_height])
+        max_heigh = min([max_heigh, y + self.height + self.border_len * 2])
+        self.end_y = max_heigh
         if self.py is None:
             # self.py,self.px = screen.getyx()
             # self.Spy, self.Spx = screen.getyx()
@@ -560,12 +564,11 @@ class Stack(EventMix):
                 msg =  ' '*  (max_width - len(content.encode()) -3) + content
             else:
                 msg = content
-        return msg[:-1]
+        return msg
     
     def draw(self,datas,screen,y,x, max_width,refresh=False):
         border_len = self.border_len
-        max_h = min(len(datas) + border_len *2 , Application.height - border_len)
-        
+        max_h = self.end_y - y 
         self.pad = curses.newpad(max_h, max_width)
         self.c_y, self.c_x = y, x
         
@@ -585,7 +588,7 @@ class Stack(EventMix):
             self.pad.border(0)
         # self.pad.refresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
         if refresh:
-            self.pad.refresh(0,0,y,x, y+max_h -2,x+ max_width -1)
+            self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
         else:
             self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
         
@@ -600,7 +603,7 @@ class Stack(EventMix):
         select = cls(datas, id='unknow')
         H,W = Application.Size()
         if y + len(datas) -1 >=  H:
-            y = H - len(datas)
+            y = H - len(datas) if H - len(datas) > 0 else y
         if x + width - 1 >= W:
             x = W - width
         k = -1
@@ -610,7 +613,7 @@ class Stack(EventMix):
             screen = Application.init_screen
         while k != exit_key:
             select.action_listener(k)
-            select.update(screen, ch=k, y=y, x=x, pad_width=width, refresh=True)
+            select.update(screen, ch=k, y=y, x=x+2, pad_width=width,pad_height=max_height, refresh=True)
             select.ready_key(k)
             
             # screen.refresh()
@@ -623,9 +626,126 @@ class Stack(EventMix):
         return select.get_now_text()
 
 class TextPanel(Stack):
-    def __init__(self, text, id=None,*args, **opts):
+    def __init__(self, text, id=None,max_width=None,*args, **opts):
         datas = text.split('\n')
-        super().__init__(datas, id=id, *args, **opts)
+        lines = []
+        for l in datas:
+            if len(l) >= max_width - 1:
+                now = ''
+                for w in l.split():
+                    if len(now) + len(w) >= max_width -2:
+                        lines.append(now[1:])
+                        now = ''
+                    else:
+                        now += ' ' + w
+                if len(now) > 0:
+                    lines.append(now)
+                    
+            else:
+                lines.append(l)
+            
+
+        super().__init__(lines, id=id, *args, **opts)
+        self.pro = 0
+
+    @listener('h')
+    def left(self):
+        if self.ix > 0:
+            line_words_num = len(self.datas[self.ix - 1].split())
+        else:
+            return
+        if self.px > 0:
+            self.px -= 1
+        else:
+            self.px = line_words_num - 1
+            if self.py ==0:
+                if self.cursor > 0:
+                    self.cursor -= 1
+            else:
+                self.py -= 1
+
+            self.ix -= 1
+    
+
+    @listener('l')
+    def right(self):
+        line_words_num = len(self.datas[self.ix].split()) - 1
+        log('line ',line_words_num)
+        if self.px  < line_words_num:
+            self.px += 1
+        else:
+            self.px = 0
+            
+            if self.ix < self.height - 1:
+                self.ix += 1
+                
+                if self.py > self.end_y - self.start_y - self.border_len * 2 - 3:
+                    self.cursor += 1
+                else:
+                    self.py += 1
+    
+
+    def draw_text(self,row, col, text,max_width=None, attrs=1,prefix='',prefix_attrs=None, mark=False):
+        words = text.split()
+        
+            # self.pad.addstr(row, col, text,curses.A_REVERSE | attrs )
+        self.draw_words(row, words, max_width, attrs=attrs, mark=mark)
+        # self.pad.addstr(row, col, text, attrs)
+    
+
+    def draw_words(self,row,  words, max_width,attrs=None, mark=False):
+        if mark:
+            m = attrs
+            mark_m = m | curses.A_REVERSE
+            
+        else:
+            m = attrs
+            mark_m = m
+        w_now = 1
+        no = 0
+        for word in words:            
+            if self.px == no:
+                self.pad.addstr(row, w_now, word, mark_m)
+            else:
+                self.pad.addstr(row, w_now, word, m)
+            w_now += (len(word) + 1) 
+            no += 1
+                
+
+    @classmethod
+    def Popup(cls,text,context=None, screen=None, y=None ,x=None, exit_key=147, width=50, max_height=30):
+        if context:
+            y,x = context.cursor_yx
+            y+=1
+            x+=1
+            screen = context.screen
+        select = cls(text, id='unknow', max_width=width)
+        H,W = Application.Size()
+        H = min([H, max_height])
+        if y + select.height -1 >=  H:
+            y = H - select.height if H - select.height > 0 else y
+        if x + width - 1 >= W:
+            x = W - width
+        k = -1
+        select.focus = True
+        msgBox(msg='alt+q to exit')
+        if not  hasattr(screen, 'refresh'):
+            screen = Application.init_screen
+        log('y/x',y,x)
+        while k != exit_key:
+            select.action_listener(k)
+            select.update(screen, ch=k, y=y, x=x+2, pad_width=width, pad_height=max_height,refresh=True)
+            screen.addstr(select.start_y,x+4, '%.1f%% ' % (select.ix / select.height * 100 ))
+            select.ready_key(k)
+            
+            # screen.refresh()
+            # select.pad.refresh()
+            k = screen.getch()
+            log(k)
+            
+        # Application.instance.refresh(clear=True)
+        screen.refresh()
+        return select.get_now_text()
     
 
 class Menu(Stack):
