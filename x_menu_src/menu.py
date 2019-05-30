@@ -385,7 +385,7 @@ class Stack(EventMix):
 
     @property
     def cursor_yx(self):
-        return self.c_y + self.py, self.c_x
+        return self.c_y + self.py, self.c_x + self.px
 
     @property
     def width(self):
@@ -635,6 +635,9 @@ class TextPanel(Stack):
     def __init__(self, text, id=None,max_width=None,*args, **opts):
         datas = text.split('\n')
         lines = []
+        if not max_width:
+            H,W = Application.Size()
+            max_width = W
         for l in datas:
             if len(l) >= max_width - 1:
                 now = ''
@@ -706,7 +709,8 @@ class TextPanel(Stack):
             return
         if len(word) > 0:
             # Application.init_screen.refresh()
-            self.__class__.RunShell("date; echo %s " % word, self, w_pad=self.width)
+            #self.__class__.RunShell("date; echo %s " % word, self, w_pad=self.width)
+            pass
     # @listener('t')
     # def trans(self):
         # word = self.datas[self.ix].split()[self.px]
@@ -756,7 +760,7 @@ class TextPanel(Stack):
             screen = context.screen
         select = cls(text, id='unknow', max_width=width)
         H,W = Application.Size()
-        H = min([H, max_height])
+        #H = min([H, max_height])
         if y + select.height -1 >=  H:
             y = H - select.height if H - select.height > 0 else y
         if x + width - 1 >= W:
