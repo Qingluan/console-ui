@@ -1,5 +1,6 @@
 import curses
 import os, sys
+import re
 from .event import EventMix, listener
 from .log import log
 from .charactors import SYMBOL
@@ -29,7 +30,9 @@ class ColorConfig:
         'spicial':3,
         'link':4,
         'finish':9,
-        'attrs':5
+        'attrs':5,
+        'map':6,
+        'green':7,
     }
     @classmethod
     def default(cls):
@@ -38,6 +41,8 @@ class ColorConfig:
         curses.init_pair(cls.config['label'], curses.COLOR_WHITE, curses.COLOR_BLUE)
         curses.init_pair(cls.config['normal'],curses.COLOR_BLUE , curses.COLOR_BLACK)
         curses.init_pair(cls.config['link'],curses.COLOR_BLUE , curses.COLOR_BLACK)
+        curses.init_pair(cls.config['map'],curses.COLOR_WHITE , curses.COLOR_BLACK)
+        curses.init_pair(cls.config['green'],curses.COLOR_GREEN , curses.COLOR_WHITE)
     
     @classmethod
     def get(cls, label):
@@ -631,6 +636,7 @@ class Stack(EventMix):
             # screen.refresh()
 
 
+    
 class TextPanel(Stack):
     def __init__(self, text, id=None,max_width=None,*args, **opts):
         datas = text.split('\n')
@@ -656,6 +662,7 @@ class TextPanel(Stack):
 
         super().__init__(lines, id=id, *args, **opts)
         self.pro = 0
+        
 
     @listener('h')
     def left(self):
@@ -790,7 +797,6 @@ class TextPanel(Stack):
             select.update(screen, ch=k, y=y, x=x+2, pad_width=width, pad_height=max_height,refresh=True)
             screen.refresh()
             
-    
 
 class Menu(Stack):
     
@@ -881,6 +887,7 @@ class Menu(Stack):
         
         select = cls(datas, id='select',  y=y, x=x, max_width=width)
         k = 0
+        # Application.F
         select.focus = True
         while k != exit_key:
             select.action_listener(k)
@@ -890,7 +897,177 @@ class Menu(Stack):
             k = screen.getch()
         Application.instance.refresh(clear=True)
         return select.get_now_text()
+
+class Map(Stack):
+
+    def __init__(self, map_res, id=None, max_width=None, *args, **opts):
+        self.place_dict = self.get_map_dict(map_res)
+        if isinstance(map_res, str):
+            map_res = map_res.split("\n")
+        
+        self.border_len = 0
+        super().__init__(map_res, id=id, *args, **opts)
+        self.cursor_x = 0
+        
+
+    def update(self, screen, y=None, x=None, pad_width=None,pad_height=None,ch=None, draw=True,refresh=False):
+        if not self.screen:
+            self.screen = screen
+        self.start_y,self.start_x = y,x
+        max_heigh,max_width = Application.Size()
+        if pad_height:
+            max_heigh = min([max_heigh, y + pad_height])
+        max_heigh = min([max_heigh, y + self.height + self.border_len * 2])
+        self.end_y = max_heigh
+        self.end_x = pad_width
+        if self.py is None:
+            # self.py,self.px = screen.getyx()
+            # self.Spy, self.Spx = screen.getyx()
+            self.py,self.px = 0,0
+            # log(self.id,max_heigh, self.py, self.px)
+            self.Spy, self.Spx = 0,0
+        datas = self.datas
+        # log('y',y)
+        cursor = self.cursor
+        if isinstance(datas, list):
+        
+            datas = datas[cursor:cursor+ max_heigh - y - self.border_len]
+        else:
+            datas = dict(list(datas.items())[cursor:cursor+ max_heigh - y - self.border_len ])
+        if draw:
+            self.draw(datas, screen, y,x , pad_width, refresh=refresh)
     
+    def padding_space(self, content, max_width, mark=False, direct='r'):
+        content = content.replace("\n","")
+        content = content[self.cursor_x: self.cursor_x + max_width-2] if len(content.encode()) >= max_width -2 else content
+        if mark:
+            if direct == 'r':
+                msg = content + ' '*  (max_width - len(content.encode()) -3)
+            else:
+                msg =  ' '*  (max_width - len(content.encode()) -3) + content
+        else:
+            if direct != 'r': 
+                msg =  ' '*  (max_width - len(content.encode()) -3) + content
+            else:
+                msg = content
+        return msg
+    
+    def get_map_dict(self,map_res):
+        w = re.compile(r'([\w\'\s]+)')
+        places = [i.strip() for i in w.findall(map_res) if i.strip()]
+        lines = map_res.split("\n")
+        map_dict = {}
+        for r,l in enumerate(lines):
+            for p in places:
+                if p in l:
+                    col = l.index(p) + len(p)//2
+                    map_dict[p] = (r, col)
+        return map_dict
+            
+    def draw(self,datas,screen,y,x, max_width,refresh=False):
+        border_len = self.border_len
+        max_h = self.end_y - y 
+        self.pad = curses.newpad(max_h, max_width)
+        self.c_y, self.c_x = y, x
+        
+        # if self.py == 0:
+        #     self.py += border_len
+        for row in range(len(datas)):
+            content = self.get_text(row, datas=datas)
+            if row == self.py and self.focus:
+                self.draw_text(row + border_len ,1, content,max_width=max_width,  mark=True, attrs=ColorConfig.get('map'))
+                self.c_x += 1
+            else:
+                self.draw_text(row + border_len,1, content, max_width=max_width, attrs=ColorConfig.get('map'))
+        
+        # rectangle(screen, y,x, y + len(datas) -1 , x+ max_width -1)
+        if self.border_len > 0:
+            self.pad.border(0)
+        # self.pad.refresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
+        if refresh:
+            self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
+        else:
+            self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
+    
+    def draw_text(self,row, col, text,max_width=None, attrs=1,prefix='',prefix_attrs=None, mark=False):
+        # if mark:
+        #     attrs |= curses.A_REVERSE
+            # self.pad.addstr(row, col, text,curses.A_REVERSE | attrs )
+        
+        if prefix:
+            if prefix_attrs:
+                self.pad.addstr(row, col, prefix, prefix_attrs)
+            else:
+                self.pad.addstr(row, col, prefix)
+            text = self.padding_space(text, max_width, mark=mark)
+            self.pad.addstr(text, attrs)
+        else:
+            # log("col:", col, "px", self.px)
+            if mark:
+                pxs = []
+                citis = re.findall(r'([\w\s\']+)',text)
+                for c in citis:
+                    s = text.index(c)
+                    log("test eq:",s + len(c) // 2 - self.cursor_x, self.px, 'row', row)
+                    if s + len(c) //2 - self.cursor_x  == self.px:
+                        
+                        for i in range(s, s+len(c)):
+                            pxs.append(i)
+            text = self.padding_space(text, max_width, mark=mark)
+            for cx,ch in enumerate(text):
+                if mark and cx + self.cursor_x in pxs:
+                    attrs2 = ColorConfig.get('green') | curses.A_REVERSE
+                    self.pad.addstr(row, cx+1, ch, attrs2)
+                else:
+                    self.pad.addstr(row, cx+1, ch, attrs)
+    
+    @listener('h')
+    def left(self):
+        if self.ix > 0:
+            line_words_num = len(self.datas[self.ix - 1])
+        else:
+            return
+        if self.px > 0:
+            self.px -= 1
+        else:
+            self.px = line_words_num - 1
+            if self.py ==0:
+                if self.cursor > 0:
+                    self.cursor -= 1
+            else:
+                self.py -= 1
+
+            self.ix -= 1
+    
+    @listener('l')
+    def right(self):
+        line_words_num = len(self.datas[self.ix]) - 1
+        log('line ',line_words_num)
+        if self.px  < line_words_num:
+            self.px += 1
+        else:
+            self.px = 0
+            
+    @listener("g")
+    def choose_map_place(self):
+        log(self.place_dict)
+        place = Stack.Popup(list(self.place_dict.keys()), context=self, exit_key=10)
+        log(place)
+        city_y, city_x = self.place_dict[place]
+        if city_x-self.cursor_x >  self.end_x:
+            self.cursor_x = city_x - (self.end_x + self.start_x) // 2
+        
+        if city_x -self.cursor_x <  self.start_x:
+            self.cursor_x = (self.end_x + self.start_x) // 2 - city_x
+
+        if city_y > (self.end_y - self.start_y + self.cursor):
+            self.cursor = (city_y - self.cursor) // 2
+        
+        log('city: row:%d , col:%d' % (city_y,city_x ))
+        self.py = city_y - self.cursor 
+        self.px = (self.end_x + self.start_x) // 2
+        
+
 
 class TreeStack(Stack):
 
