@@ -43,7 +43,7 @@ class ColorConfig:
         curses.init_pair(cls.config['link'],curses.COLOR_BLUE , curses.COLOR_BLACK)
         curses.init_pair(cls.config['map'],curses.COLOR_WHITE , curses.COLOR_BLACK)
         curses.init_pair(cls.config['green'],curses.COLOR_GREEN , curses.COLOR_WHITE)
-    
+
     @classmethod
     def get(cls, label):
         return curses.color_pair(cls.config.get(label, 'normal'))
@@ -73,14 +73,14 @@ class Application(EventMix):
     def __setitem__(self, id, widget, **kargs):
         self.widgets_opts[id].update(kargs)
         self.__class__.widgets[id] = widget
-    
+
     def __getitem__(self, id):
         return  self.__class__.widgets[id]
 
     @property
     def weight(self):
         return float(self.size[1]) / sum([self.widgets_opts[i]['weight'] for i in self.widgets_opts])
-    
+
     @classmethod
     def Size(cls):
         if cls.init_screen is None:
@@ -93,7 +93,7 @@ class Application(EventMix):
 
     @property
     def size(self):
-        Application.height, Application.width = self.screen.getmaxyx() 
+        Application.height, Application.width = self.screen.getmaxyx()
         return Application.height, Application.width
 
     def add_widget(self, widget,id=None, weight=1, direct='r', **kargs):
@@ -109,7 +109,7 @@ class Application(EventMix):
         widget.top = self.top
 
         #import pdb;pdb.set_trace();
-        
+
         if direct == 'r':
             if len(self.ids) > 0:
                 widget.left_widget = self.__class__.widgets[self.ids[-1]]
@@ -123,7 +123,7 @@ class Application(EventMix):
 
         self.__class__.widgets[id] = widget
         self.widgets_opts[id] = kargs
-    
+
     def clear_widget(self):
         self.widgets_opts = {}
         self.ids = []
@@ -142,7 +142,7 @@ class Application(EventMix):
         for widget in self.widgets.values():
             if widget.focus:
                 widget.action_listener(ch)
-        
+
         for widget in self.__class__.extra_widgets:
             if widget.focus:
                 widget.action_listener(ch)
@@ -157,7 +157,7 @@ class Application(EventMix):
             widget.update(self.screen,y,now_x, pad_width,ch=ch)
             if is_not_first:
                 self.draw_extra(y, now_x)
-            
+
             now_x += pad_width
             if not is_not_first:
                 is_not_first = True
@@ -172,11 +172,11 @@ class Application(EventMix):
         for v in self.widgets.values():
             v.focus = False
         self.widgets[idx].focus = True
-    
+
     @classmethod
     def LossFocus(cls):
         for i,v in cls.widgets.items():
-            if v.focus: 
+            if v.focus:
                 v.focus = False
                 cls.last_focus = i
     @classmethod
@@ -202,7 +202,7 @@ class Application(EventMix):
             return
         if clear:
             self.screen.clear()
-        
+
         if focus:
             self.focus(focus)
         # import pdb;pdb.set_trace()
@@ -219,7 +219,7 @@ class Application(EventMix):
         curses.curs_set(0)
         # curses.keypad(1)
         self.refresh(clear=True)
-        
+
         ColorConfig.default()
         c = -1
         while k != ord('q'):
@@ -230,10 +230,10 @@ class Application(EventMix):
                 # self.refresh(k=k, clear=True)
             self.refresh(k=k)
             # msgBox(stdscr, "type: %d " % k)
-            
+
             k = self.screen.getch()
-            
-            
+
+
 
     @classmethod
     def get_widget_by_id(cls, id):
@@ -244,7 +244,7 @@ class _Textbox(Textbox):
     def __init__(self, win, insert_mode=True):
         super(_Textbox, self).__init__(win, insert_mode)
 
-    
+
     def do_command(self, ch):
         if ch == 127:  # BackSpace
             Textbox.do_command(self, 8)
@@ -271,8 +271,8 @@ class Text(EventMix):
 
         Height, Width  =  Application.Size()
         if not y or not x:
-            
-            self.height = Height // 3 
+
+            self.height = Height // 3
             self.width = Width -3
             self.rect = [self.height * 2 , 0, Height-2, Width -3]
             self.loc = [self.height - 3 , self.width -1 , self.height * 2 + 1, 1]
@@ -288,9 +288,9 @@ class Text(EventMix):
                 self.width = Width -3 - x
             else:
                 self.width = width
-            
 
-            
+
+
             if content:
                 self.text = content
                 # height = len(content) // self.width
@@ -300,7 +300,7 @@ class Text(EventMix):
                     height =10
             else:
                 height = 10
-            
+
             if height + y >= Height -3 :
                 # self.height = Height - 2 - y
                 y = Height -3 - height
@@ -309,15 +309,15 @@ class Text(EventMix):
                 self.height = height
             log('x',x,'heigt:', height, 'self.height', self.height)
             log('App:', Height, Width)
-            
-            
+
+
             self.rect = [y , x, y + self.height , x + self.width]
             self.loc = [self.height - 1, self.width -1 , y+1, x +1]
             self.msg = None
             self.title = "Ctrl-G to exit " if not title else title
 
             log('rect:', self.rect)
-                
+
 
         if not Application.editor:
             Application.editor = self
@@ -337,7 +337,7 @@ class Text(EventMix):
             for row, l in enumerate(self.text.split("\n")):
                 log('row', row, len(l))
                 editwin.addstr(row,0, l.strip()[:self.width])
-        
+
         rectangle(stdscr, *self.rect)
         log('self.loc', self.loc, 'self.rect', self.rect)
         stdscr.refresh()
@@ -352,7 +352,7 @@ class Text(EventMix):
         curses.curs_set(0)
         self.msg = message
         Application.instance.refresh(clear=True)
-    
+
     @classmethod
     def Popup(cls,context=None, screen=None,title=None, content=None, y=None,x=None, width=80, **opts ):
         if context:
@@ -407,7 +407,7 @@ class Stack(EventMix):
         if self.cursor > 0 and self.py == self.Spy:
             self.cursor -= 1
         elif self.cursor == 0 and self.py == self.Spy:
-            self.py = self.end_y - self.border_len * 2 - self.start_y - 1 
+            self.py = self.end_y - self.border_len * 2 - self.start_y - 1
             if self.height > Application.height:
                 self.cursor = self.height -  self.end_y + self.start_y + self.border_len * 2
                 # self.py += self.border_len * 2 -1
@@ -419,7 +419,7 @@ class Stack(EventMix):
             #    infoShow(self.screen, self)
 
             #self.py -= 1
-        self.ix -= 1 
+        self.ix -= 1
         if self.ix < 0:
             self.ix = self.height - 1
         self.update_when_cursor_change(self.get_text(self.ix), ch="k")
@@ -428,7 +428,7 @@ class Stack(EventMix):
     def show_help(self):
         msg = '\n'.join([ str(chr(k).encode()) + ":" + str(k)+":  "+v for k,v in self.instances.items() if hasattr(self, v) ])
         Text.Popup(context=self,title='show key to handle, Ctrl+G exit and change keymap',content=msg)
-        
+
 
     @listener('h')
     def left(self):
@@ -440,7 +440,7 @@ class Stack(EventMix):
 
     @listener('l')
     def right(self):
-        # invoid right and right and right, 
+        # invoid right and right and right,
         # only right -> id's window
         if self.right_widget and self.mode == 'chains':
             self.focus = False
@@ -450,7 +450,7 @@ class Stack(EventMix):
 
     @listener("j")
     def down(self):
-        
+
         sm = self.end_y
         if self.py >= self.end_y - self.start_y  - self.border_len*2 - 1:
             if self.py + self.cursor >= self.height -1 :
@@ -479,13 +479,13 @@ class Stack(EventMix):
             self.screen.move(self.py ,self.px)
             self.ix += 1
             # infoShow(self.screen, self)
-        # self.ix += 1 
+        # self.ix += 1
         if self.ix >= self.height - 1:
             self.ix = 0
-        
-            
+
+
         self.update_when_cursor_change(self.get_text(self.ix), ch="j")
-    
+
     @listener(10)
     def enter(self):
         msgBox(self.screen," hello world")
@@ -515,7 +515,7 @@ class Stack(EventMix):
         # log('y',y)
         cursor = self.cursor
         if isinstance(datas, list):
-        
+
             datas = datas[cursor:cursor+ max_heigh - y - self.border_len]
         else:
             datas = dict(list(datas.items())[cursor:cursor+ max_heigh - y - self.border_len ])
@@ -523,7 +523,7 @@ class Stack(EventMix):
 
         if draw:
             self.draw(datas, screen, y,x , pad_width, refresh=refresh)
-    
+
     def on_text(self,msg ,ix):
         return msg
 
@@ -534,7 +534,7 @@ class Stack(EventMix):
             return self.on_text(list(datas.keys())[ix], ix)
         else:
             return self.on_text(str(datas[ix]), ix)
-    
+
     def get_now_text(self):
         if isinstance(self.datas, list):
             return self.on_text(self.datas[self.ix], self.ix)
@@ -555,7 +555,7 @@ class Stack(EventMix):
         else:
             text = self.padding_space(text, max_width, mark=mark)
             self.pad.addstr(row, col, text, attrs)
-    
+
     def padding_space(self, content, max_width, mark=False, direct='r'):
         content = content.replace("\n","")
         content = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
@@ -565,18 +565,18 @@ class Stack(EventMix):
             else:
                 msg =  ' '*  (max_width - len(content.encode()) -3) + content
         else:
-            if direct != 'r': 
+            if direct != 'r':
                 msg =  ' '*  (max_width - len(content.encode()) -3) + content
             else:
                 msg = content
         return msg
-    
+
     def draw(self,datas,screen,y,x, max_width,refresh=False):
         border_len = self.border_len
-        max_h = self.end_y - y 
+        max_h = self.end_y - y
         self.pad = curses.newpad(max_h, max_width)
         self.c_y, self.c_x = y, x
-        
+
         # if self.py == 0:
         #     self.py += border_len
         for row in range(len(datas)):
@@ -585,9 +585,9 @@ class Stack(EventMix):
                 self.draw_text(row + border_len ,1, content,max_width=max_width,  mark=True)
                 self.c_x += 1
             else:
-                
+
                 self.draw_text(row + border_len,1, content, max_width=max_width, attrs=ColorConfig.get('normal'))
-        
+
         # rectangle(screen, y,x, y + len(datas) -1 , x+ max_width -1)
         if self.border_len > 0:
             self.pad.border(0)
@@ -596,8 +596,8 @@ class Stack(EventMix):
             self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
         else:
             self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
-    
-    
+
+
 
     @classmethod
     def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True, max_height=10, exit_key=147, width=30):
@@ -622,12 +622,12 @@ class Stack(EventMix):
                 select.action_listener(k)
                 select.update(screen, ch=k, y=y, x=x+2, pad_width=width,pad_height=max_height, refresh=True)
                 select.ready_key(k)
-                
+
                 # screen.refresh()
                 # select.pad.refresh()
                 k = screen.getch()
                 log(k)
-                
+
             # Application.instance.refresh(clear=True)
             screen.refresh()
             return select.get_now_text()
@@ -636,7 +636,7 @@ class Stack(EventMix):
             # screen.refresh()
 
 
-    
+
 class TextPanel(Stack):
     def __init__(self, text, id=None,max_width=None,*args, **opts):
         datas = text.split('\n')
@@ -655,14 +655,14 @@ class TextPanel(Stack):
                         now += ' ' + w
                 if len(now) > 0:
                     lines.append(now)
-                    
+
             else:
                 lines.append(l)
-            
+
 
         super().__init__(lines, id=id, *args, **opts)
         self.pro = 0
-        
+
 
     @listener('h')
     def left(self):
@@ -681,7 +681,7 @@ class TextPanel(Stack):
                 self.py -= 1
 
             self.ix -= 1
-    
+
 
     @listener('l')
     def right(self):
@@ -691,16 +691,16 @@ class TextPanel(Stack):
             self.px += 1
         else:
             self.px = 0
-            
+
             if self.ix < self.height - 1:
                 self.ix += 1
-                
+
                 if self.py > self.end_y - self.start_y - self.border_len * 2 - 3:
                     self.cursor += 1
                 else:
                     self.py += 1
-    
-        
+
+
     def update_when_cursor_change(self, item, ch=None):
         word = item.split()
         if word:
@@ -725,28 +725,28 @@ class TextPanel(Stack):
 
     def draw_text(self,row, col, text,max_width=None, attrs=1,prefix='',prefix_attrs=None, mark=False):
         words = text.split()
-        
+
             # self.pad.addstr(row, col, text,curses.A_REVERSE | attrs )
         self.draw_words(row, words, max_width, attrs=attrs, mark=mark)
         # self.pad.addstr(row, col, text, attrs)
-    
+
 
     def draw_words(self,row,  words, max_width,attrs=None, mark=False):
         if mark:
             m = attrs
             mark_m = m | curses.A_REVERSE
-            
+
         else:
             m = attrs
             mark_m = m
         w_now = 1
         no = 0
-        for word in words:            
+        for word in words:
             if self.px == no:
                 self.pad.addstr(row, w_now, word, mark_m)
             else:
                 self.pad.addstr(row, w_now, word, m)
-            w_now += (len(word) + 1) 
+            w_now += (len(word) + 1)
             no += 1
 
     @classmethod
@@ -784,26 +784,26 @@ class TextPanel(Stack):
                 select.update(screen, ch=k, y=y, x=x+2, pad_width=width, pad_height=max_height,refresh=True)
                 screen.addstr(select.start_y,x+4, '%.1f%% ' % (select.ix / select.height * 100 ))
                 select.ready_key(k)
-                
+
                 # screen.refresh()
                 # select.pad.refresh()
                 k = screen.getch()
                 log(k)
-                
+
             # Application.instance.refresh(clear=True)
             screen.refresh()
             return select.get_now_text()
         else:
             select.update(screen, ch=k, y=y, x=x+2, pad_width=width, pad_height=max_height,refresh=True)
             screen.refresh()
-            
+
 
 class Menu(Stack):
-    
+
     def __init__(self,  datas, id='select', x=None,y=None,mode='chains', max_width=30, **opts):
         super().__init__(datas, id=id, mode=mode, *opts)
         if not x:
-            self.x = Application.width // 2 
+            self.x = Application.width // 2
         else:
             self.x = x + 1
 
@@ -819,7 +819,7 @@ class Menu(Stack):
         self.max_width = max_width
         # self.py = 0
         self.target_widget = None
-    
+
     def update(self, screen, ch):
         # log(self.pad)
         if not self.screen:
@@ -831,7 +831,7 @@ class Menu(Stack):
             # log(self.id,max_heigh, self.py, self.px)
             self.Spy, self.Spx = 0,0
         datas = self.datas
-        
+
         cursor = self.cursor
         datas = datas[cursor:cursor+ max_heigh - self.y]
 
@@ -852,7 +852,7 @@ class Menu(Stack):
     def draw(self, datas, screen, ch):
         max_h = len(datas) + 2
         max_width = min([max(self.width,self.max_width) + 3, Application.width])
-        
+
         self.pad = curses.newpad(max_h, max_width)
         self.pad.border(0)
         self.pad.keypad(1)
@@ -869,14 +869,14 @@ class Menu(Stack):
         log('%d %d ' %(self.y, self.x))
         right_width = min([self.x+ max_width +1,Application.width -1])
         self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,right_width)
-    
+
     @classmethod
     def which_one(cls, datas, y=3 ,x=1 , max_width=30, max_height=10):
         select = cls(datas, id='select', y=y, x=x, max_width=max_width)
         Application.LossFocus()
         select.focus = True
         Application.extra_widgets.append(select)
-    
+
     @classmethod
     def Popup(cls, datas=None, context=None, screen=None, y=None ,x=None ,exit_key=10, width=30, max_height=10):
         if context:
@@ -884,7 +884,7 @@ class Menu(Stack):
             y+=1
             x+=1
             screen = context.screen
-        
+
         select = cls(datas, id='select',  y=y, x=x, max_width=width)
         k = 0
         # Application.F
@@ -904,11 +904,11 @@ class Map(Stack):
         self.place_dict = self.get_map_dict(map_res)
         if isinstance(map_res, str):
             map_res = map_res.split("\n")
-        
+
         self.border_len = 0
         super().__init__(map_res, id=id, *args, **opts)
         self.cursor_x = 0
-        
+
 
     def update(self, screen, y=None, x=None, pad_width=None,pad_height=None,ch=None, draw=True,refresh=False):
         if not self.screen:
@@ -930,13 +930,13 @@ class Map(Stack):
         # log('y',y)
         cursor = self.cursor
         if isinstance(datas, list):
-        
+
             datas = datas[cursor:cursor+ max_heigh - y - self.border_len]
         else:
             datas = dict(list(datas.items())[cursor:cursor+ max_heigh - y - self.border_len ])
         if draw:
             self.draw(datas, screen, y,x , pad_width, refresh=refresh)
-    
+
     def padding_space(self, content, max_width, mark=False, direct='r'):
         content = content.replace("\n","")
         content = content[self.cursor_x: self.cursor_x + max_width-2] if len(content.encode()) >= max_width -2 else content
@@ -946,12 +946,12 @@ class Map(Stack):
             else:
                 msg =  ' '*  (max_width - len(content.encode()) -3) + content
         else:
-            if direct != 'r': 
+            if direct != 'r':
                 msg =  ' '*  (max_width - len(content.encode()) -3) + content
             else:
                 msg = content
         return msg
-    
+
     def get_map_dict(self,map_res):
         w = re.compile(r'([\w\'\s]+)')
         places = [i.strip() for i in w.findall(map_res) if i.strip()]
@@ -963,13 +963,13 @@ class Map(Stack):
                     col = l.index(p) + len(p)//2
                     map_dict[p] = (r, col)
         return map_dict
-            
+
     def draw(self,datas,screen,y,x, max_width,refresh=False):
         border_len = self.border_len
-        max_h = self.end_y - y 
+        max_h = self.end_y - y
         self.pad = curses.newpad(max_h, max_width)
         self.c_y, self.c_x = y, x
-        
+
         # if self.py == 0:
         #     self.py += border_len
         for row in range(len(datas)):
@@ -979,7 +979,7 @@ class Map(Stack):
                 self.c_x += 1
             else:
                 self.draw_text(row + border_len,1, content, max_width=max_width, attrs=ColorConfig.get('map'))
-        
+
         # rectangle(screen, y,x, y + len(datas) -1 , x+ max_width -1)
         if self.border_len > 0:
             self.pad.border(0)
@@ -988,12 +988,12 @@ class Map(Stack):
             self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
         else:
             self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
-    
+
     def draw_text(self,row, col, text,max_width=None, attrs=1,prefix='',prefix_attrs=None, mark=False):
         # if mark:
         #     attrs |= curses.A_REVERSE
             # self.pad.addstr(row, col, text,curses.A_REVERSE | attrs )
-        
+
         if prefix:
             if prefix_attrs:
                 self.pad.addstr(row, col, prefix, prefix_attrs)
@@ -1008,9 +1008,9 @@ class Map(Stack):
                 citis = re.findall(r'([\w\s\']+)',text)
                 for c in citis:
                     s = text.index(c)
-                    log("test eq:",s + len(c) // 2 - self.cursor_x, self.px, 'row', row)
-                    if s + len(c) //2 - self.cursor_x  == self.px:
-                        
+                    log("test eq:",s + len(c) // 2 - self.cursor_x , self.px, 'row', row, "cursor:",self.cursor_x)
+                    if s + len(c) //2 - self.cursor_x == self.px:
+
                         for i in range(s, s+len(c)):
                             pxs.append(i)
             text = self.padding_space(text, max_width, mark=mark)
@@ -1020,7 +1020,7 @@ class Map(Stack):
                     self.pad.addstr(row, cx+1, ch, attrs2)
                 else:
                     self.pad.addstr(row, cx+1, ch, attrs)
-    
+
     @listener('h')
     def left(self):
         if self.ix > 0:
@@ -1038,7 +1038,7 @@ class Map(Stack):
                 self.py -= 1
 
             self.ix -= 1
-    
+
     @listener('l')
     def right(self):
         line_words_num = len(self.datas[self.ix]) - 1
@@ -1047,7 +1047,7 @@ class Map(Stack):
             self.px += 1
         else:
             self.px = 0
-            
+
     @listener("g")
     def choose_map_place(self):
         log(self.place_dict)
@@ -1056,17 +1056,18 @@ class Map(Stack):
         city_y, city_x = self.place_dict[place]
         if city_x-self.cursor_x >  self.end_x:
             self.cursor_x = city_x - (self.end_x + self.start_x) // 2
-        
+
         if city_x -self.cursor_x <  self.start_x:
             self.cursor_x = (self.end_x + self.start_x) // 2 - city_x
-
-        if city_y > (self.end_y - self.start_y + self.cursor):
+            self.px = (self.end_x + self.start_x) // 2
+        else:
+            self.px = city_x - self.cursor_x
+        if city_y - self.cursor < self.start_y:
             self.cursor = (city_y - self.cursor) // 2
-        
-        log('city: row:%d , col:%d' % (city_y,city_x ))
-        self.py = city_y - self.cursor 
-        self.px = (self.end_x + self.start_x) // 2
-        
+
+        self.py = city_y  - self.cursor
+        log('city: row:%d , col:%d' % (city_y,city_x ),"py:",self.py, "px:", self.px)
+
 
 
 class TreeStack(Stack):
@@ -1083,7 +1084,7 @@ class TreeStack(Stack):
     @listener('h')
     def left(self):
         self.controller.move_left()
-    
+
     def update_when_cursor_change(self, item, ch):
         self.controller.update_when_cursor_change(item, ch)
 
@@ -1097,21 +1098,21 @@ class Tree:
         self.cursor = cursor
         self.now = None
         self.get_tribble()
-        
+
     def get_parent(self, cursor):
         raise NotImplementedError("")
     def get_sub(self, cursor):
         raise NotImplementedError("must implement")
-    
+
     def get_current(self, cursor):
         raise NotImplementedError("must implement")
-    
+
     def update_when_cursor_change(self, item, ch):
         raise NotImplementedError("must implemnt")
-    
+
     def get_right_cursor(self):
         raise NotImplementedError()
-    
+
     def get_left_cursor(self):
         raise NotImplementedError()
 
@@ -1128,16 +1129,16 @@ class Tree:
             Application.instance.add_widget(self.m, id='middle', weight=2)
         else:
             Application.instance['middle'] = self.m
-        
+
         if 'right' not in Application.widgets:
             Application.instance.add_widget(self.r, id='right', weight=3)
         else:
             Application.instance['right'] = self.r
-        
+
         Application.instance.refresh(clear=True)
         Application.Focus("middle")
         self.now = self.m.datas[self.m.ix]
-        
+
 
 
     def move_right(self):
@@ -1156,7 +1157,7 @@ class CheckBox(Stack):
     @property
     def width(self):
         return super().width + 3
-    
+
     @listener(32)
     def space_to_change_staus(self):
         if isinstance(self.datas,dict):
@@ -1166,7 +1167,7 @@ class CheckBox(Stack):
                 self.datas[msg] = False
             else:
                 self.datas[msg] = True
-    
+
     @listener('c')
     def rw_comment(self):
         txt = self.get_now_text()[4:]
@@ -1182,20 +1183,18 @@ class CheckBox(Stack):
             else:
                 return '[%s] ' % SYMBOL['wait'] + msg
         return msg
-    
+
     def draw_text(self,row, col, text, attrs=1,max_width=None, mark=False):
-        
+
         if self.datas.get(text[4:].strip()):
             self.pad.addstr(row, col, text[:4], ColorConfig.get('finish') | curses.A_BOLD)
             attrs =  ColorConfig.get('finish') #| curses.A_UNDERLINE
         else:
             self.pad.addstr(row, col, text[:4],  curses.A_BOLD)
-            
+
         if self.comments.get(text[4:].strip()):
             attrs = ColorConfig.get('attrs')
         if mark:
             attrs |= curses.A_REVERSE
         msg = self.padding_space(text[4:], max_width-3, mark=mark, direct='l')
         self.pad.addstr(msg, attrs )
-
-
