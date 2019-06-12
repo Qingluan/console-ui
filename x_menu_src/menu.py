@@ -610,8 +610,9 @@ class Stack(EventMix):
         H,W = Application.Size()
         if y + len(datas) -1 >=  H:
             y = H - len(datas) if H - len(datas) > 0 else y
-        if x + width - 1 >= W:
-            x = W - width
+        if x + 2 + width - 1 >= W:
+            log("over width !!! ", x, width)
+            x = W - width - 2
         k = -1
         select.focus = True
         msgBox(msg='alt+q to exit')
@@ -1056,15 +1057,24 @@ class Map(Stack):
         city_y, city_x = self.place_dict[place]
         if city_x-self.cursor_x >  self.end_x:
             self.cursor_x = city_x - (self.end_x + self.start_x) // 2
-
-        if city_x -self.cursor_x <  self.start_x:
-            self.cursor_x = (self.end_x + self.start_x) // 2 - city_x
+            log("move R over")
+            self.px = city_x - self.cursor_x
+        elif city_x -self.cursor_x <  self.start_x:
+            self.cursor_x = city_x - (self.end_x + self.start_x) // 2 
             self.px = (self.end_x + self.start_x) // 2
+            log("move L over")
         else:
             self.px = city_x - self.cursor_x
+
         if city_y - self.cursor < self.start_y:
             self.cursor = (city_y - self.cursor) // 2
 
+        if self.cursor_x < 0:
+            self.cursor_x = 0
+            self.px = city_x
+        if self.cursor < 0:
+            self.cursor = 0
+            self.py = city_y
         self.py = city_y  - self.cursor
         log('city: row:%d , col:%d' % (city_y,city_x ),"py:",self.py, "px:", self.px)
 
