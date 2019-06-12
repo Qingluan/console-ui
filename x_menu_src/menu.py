@@ -39,7 +39,7 @@ class ColorConfig:
         curses.init_pair(cls.config['finish'],curses.COLOR_GREEN, curses.COLOR_BLACK)
         curses.init_pair(cls.config['attrs'],curses.COLOR_YELLOW, curses.COLOR_BLACK)
         curses.init_pair(cls.config['label'], curses.COLOR_WHITE, curses.COLOR_BLUE)
-        curses.init_pair(cls.config['normal'],curses.COLOR_BLUE , curses.COLOR_BLACK)
+        curses.init_pair(cls.config['normal'],curses.COLOR_RED , curses.COLOR_BLACK)
         curses.init_pair(cls.config['link'],curses.COLOR_BLUE , curses.COLOR_BLACK)
         curses.init_pair(cls.config['map'],curses.COLOR_WHITE , curses.COLOR_BLACK)
         curses.init_pair(cls.config['green'],curses.COLOR_GREEN , curses.COLOR_WHITE)
@@ -232,6 +232,8 @@ class Application(EventMix):
             # msgBox(stdscr, "type: %d " % k)
 
             k = self.screen.getch()
+            #self.screen.clear()
+            #self.screen.refresh()
 
 
 
@@ -354,18 +356,21 @@ class Text(EventMix):
         Application.instance.refresh(clear=True)
 
     @classmethod
-    def Popup(cls,context=None, screen=None,title=None, content=None, y=None,x=None, width=80, **opts ):
+    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,height=None, width=80, **opts ):
         if context:
             y,x = context.cursor_yx
             y+=2
             x+=3
             screen = context.screen
         editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, **opts)
+        if height:
+            editor.height = height
         editor.update(screen, title=title)
         return editor.msg
 
 
 class Stack(EventMix):
+    last_popup = None
 
     def __init__(self, datas,id=None,mode='chains',border_len=1, **opts):
         self.screen = None
@@ -422,6 +427,7 @@ class Stack(EventMix):
         self.ix -= 1
         if self.ix < 0:
             self.ix = self.height - 1
+        log("ix:",self.ix)
         self.update_when_cursor_change(self.get_text(self.ix), ch="k")
 
     @listener('?')
@@ -482,6 +488,7 @@ class Stack(EventMix):
         # self.ix += 1
         if self.ix >= self.height - 1:
             self.ix = 0
+        self.ix = self.py + self.cursor    
 
 
         self.update_when_cursor_change(self.get_text(self.ix), ch="j")
@@ -575,6 +582,7 @@ class Stack(EventMix):
         border_len = self.border_len
         max_h = self.end_y - y
         self.pad = curses.newpad(max_h, max_width)
+        self.end_x = self.start_x + max_width
         self.c_y, self.c_x = y, x
 
         # if self.py == 0:
@@ -592,12 +600,24 @@ class Stack(EventMix):
         if self.border_len > 0:
             self.pad.border(0)
         # self.pad.refresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
+        self.last_refresh = [0,0,y,x, y +max_h - 1, x + max_width -1 ]
+        log('save refresh:',self.last_refresh)
+
         if refresh:
             self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
         else:
             self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
 
+    def Redraw(self):
+        if hasattr(self, 'last_refresh'):
+            self.pad.refresh(*self.last_refresh)
 
+    @classmethod
+    def Cl(cls):
+        if cls.last_popup and hasattr(cls.last_popup, 'last_refresh'):
+            cls.last_popup.pad.clear()
+            cls.last_popup.pad.refresh(*cls.last_popup.last_refresh)
+            
 
     @classmethod
     def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True, max_height=10, exit_key=147, width=30):
@@ -607,6 +627,7 @@ class Stack(EventMix):
             x+=1
             screen = context.screen
         select = cls(datas, id='unknow')
+        cls.last_popup = select
         H,W = Application.Size()
         if y + len(datas) -1 >=  H:
             y = H - len(datas) if H - len(datas) > 0 else y
@@ -663,7 +684,27 @@ class TextPanel(Stack):
 
         super().__init__(lines, id=id, *args, **opts)
         self.pro = 0
+    def reload_text(self, text, max_width=None):
+        datas = text.split('\n')
+        lines = []
+        if not max_width:
+            H,W = Application.Size()
+            max_width = W
+        for l in datas:
+            if len(l) >= max_width - 1:
+                now = ''
+                for w in l.split():
+                    if len(now) + len(w) >= max_width -2:
+                        lines.append(now[1:])
+                        now = ''
+                    else:
+                        now += ' ' + w
+                if len(now) > 0:
+                    lines.append(now)
 
+            else:
+                lines.append(l)
+        self.datas = lines        
 
     @listener('h')
     def left(self):
@@ -767,6 +808,7 @@ class TextPanel(Stack):
             x+=1
             screen = context.screen
         select = cls(text, id='unknow', max_width=width)
+        cls.last_popup = select
         H,W = Application.Size()
         #H = min([H, max_height])
         if y + select.height -1 >=  H:
