@@ -25,7 +25,7 @@ def infoShow(screen, win):
 
 class ColorConfig:
     config = {
-        'label':1,
+        'label':11,
         'normal':2,
         'spicial':3,
         'link':4,
@@ -255,7 +255,7 @@ class _Textbox(Textbox):
 
 class Text(EventMix):
 
-    def __init__(self,content=None,title=None, id=None,y=None,x=None,width=80, **ops):
+    def __init__(self,content=None,title=None, id=None,y=None,x=None,width=80, height=30, **ops):
         self.screen = None
         self.cursor = 0
         self.border = 1
@@ -272,6 +272,8 @@ class Text(EventMix):
         self.text = ''
 
         Height, Width  =  Application.Size()
+        #Height = min([Height, height])
+        #Width = min([Width, width])
         if not y or not x:
 
             self.height = Height // 3
@@ -291,17 +293,21 @@ class Text(EventMix):
             else:
                 self.width = width
 
+            if y + height  > Height - 3:
+                self.height = Height -3 - y
+            else:
+                self.height = height
 
 
             if content:
                 self.text = content
                 # height = len(content) // self.width
-                height = content.count('\n') + 3
+                height = content.count('\n')
                 log('hh', height)
-                if height < 10:
-                    height =10
+                if height < 2:
+                    height =2
             else:
-                height = 10
+                height = 2
 
             if height + y >= Height -3 :
                 # self.height = Height - 2 - y
@@ -324,24 +330,33 @@ class Text(EventMix):
         if not Application.editor:
             Application.editor = self
 
-    def update(self, screen, pad_width=30,pad_height=30,ch=None, draw=True, title=None):
+    def update(self, screen, pad_width=30,pad_height=30,ch=None, draw=True, style='label',title=None):
         if not self.screen:
             self.screen = screen
         if title:
             self.title = title
         stdscr = self.screen
-        msg = ' '+ self.title + (self.width - len(self.title) - 2) * ' ' if self.width - len(self.title) > 2 else self.title
-        stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
+
         log('self.loc', self.loc)
+        lines = self.text.split("\n")
+        if len(lines) > self.loc[0]:
+            self.rect[2] += len(lines) - self.loc[0]
+            self.loc[0] = len(lines)
         editwin = curses.newwin(*self.loc)
         curses.curs_set(1)
         if self.text:
-            for row, l in enumerate(self.text.split("\n")):
+            for row, l in enumerate(lines):
                 log('row', row, len(l))
                 editwin.addstr(row,0, l.strip()[:self.width])
 
         rectangle(stdscr, *self.rect)
         log('self.loc', self.loc, 'self.rect', self.rect)
+        if style == 'label':
+            msg = ' '+ self.title + (self.width - len(self.title) - 2) * ' ' if self.width - len(self.title) > 2 else self.title
+            stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
+        else:
+            msg = 'ctrl + G exit: ' + str(title)
+            stdscr.addstr(self.rect[0], self.rect[1]+4, msg, curses.A_BOLD |  ColorConfig.get('map') )
         stdscr.refresh()
 
         box = _Textbox(editwin)
@@ -356,16 +371,16 @@ class Text(EventMix):
         Application.instance.refresh(clear=True)
 
     @classmethod
-    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,height=None, width=80, **opts ):
+    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,height=20, width=80, **opts ):
         if context:
             y,x = context.cursor_yx
             y+=2
             x+=3
             screen = context.screen
-        editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, **opts)
-        if height:
-            editor.height = height
-        editor.update(screen, title=title)
+        editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, height=height, **opts)
+        #if height:
+        #    editor.height = height
+        editor.update(screen, pad_height=height,title=title, style=opts.get('style'))
         return editor.msg
 
 
@@ -503,6 +518,19 @@ class Stack(EventMix):
             text.update(self.screen)
 
 
+
+    def _show(self,text):
+        time.sleep(0.03)
+        TextPanel.Cl()
+        self.Redraw()
+        TextPanel.Popup(text, screen=self.screen,x=self.width//2, y=self.ix + 10, focus=False, width=len(text)+3)
+    def show(self, text):
+        Stack.run_background(self._show, text)
+
+    def get_input(self, title):
+        res = Text.Popup(content='', height=0,screen=self.screen, x=self.width // 4,y = self.ix+5, max_height=1, exit_key=10, style='norm', title=title)
+        return res
+
     def update(self, screen, y=None, x=None, pad_width=None,pad_height=None,ch=None, draw=True,refresh=False):
         if not self.screen:
             self.screen = screen
@@ -540,7 +568,10 @@ class Stack(EventMix):
         if isinstance(datas, dict):
             return self.on_text(list(datas.keys())[ix], ix)
         else:
-            return self.on_text(str(datas[ix]), ix)
+            try:
+                return self.on_text(str(datas[ix]), ix)
+            except IndexError:
+                return self.on_text('',ix)
 
     def get_now_text(self):
         if isinstance(self.datas, list):
@@ -620,7 +651,7 @@ class Stack(EventMix):
             
 
     @classmethod
-    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True, max_height=10, exit_key=147, width=30):
+    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True,title='Select', max_height=10, exit_key=147, width=30):
         if context:
             y,x = context.cursor_yx
             y+=1
@@ -636,7 +667,7 @@ class Stack(EventMix):
             x = W - width - 2
         k = -1
         select.focus = True
-        msgBox(msg='alt+q to exit')
+        msgBox(msg=title)
         if not  hasattr(screen, 'refresh'):
             screen = Application.init_screen
         if focus:
@@ -1250,3 +1281,9 @@ class CheckBox(Stack):
             attrs |= curses.A_REVERSE
         msg = self.padding_space(text[4:], max_width-3, mark=mark, direct='l')
         self.pad.addstr(msg, attrs )
+    def get_options(self):
+        res = []
+        for k in self.datas:
+            if self.datas[k]:
+                res.append(k)
+        return res
