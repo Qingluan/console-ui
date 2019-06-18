@@ -852,7 +852,7 @@ class TextPanel(Stack):
         w_now = 1
         no = 0
         if mark:
-            now_word = words[self.px]
+            now_word = words[self.px % len(words)]
             words = ' '.join(words)[self.pxc:self.pxc + max_width-self.border_len].split()
             if now_word in words:
                 if self.direction == 'right':
