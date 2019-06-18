@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='x_menu',
-    version='0.0.4',
+    version='0.0.5',
     description='api for console ui',
     url='https://github.com/Qingluan/console-ui.git',
     author='auth',
@@ -12,7 +12,7 @@ setup(name='x_menu',
     include_package_data=True,
     zip_safe=False,
     packages=find_packages(),
-    install_requires=[''],
+    install_requires=['termcolor'],
     entry_points={
         'console_scripts': ['']
     },

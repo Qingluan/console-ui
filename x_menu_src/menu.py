@@ -1,9 +1,12 @@
 import curses
+import termcolor
 import os, sys
 import re
 from .event import EventMix, listener
 from .log import log
 from .charactors import SYMBOL
+from .text import ascii2curses
+from .text import ascii2filter
 from curses.textpad import Textbox, rectangle
 import time
 
@@ -24,29 +27,39 @@ def infoShow(screen, win):
     msgBox(screen, "id:%s yx:%d,%d ix:%d  py:%d, height:%d, screen_h:%d screen_w:%d cur:%d" % (win.id, cy,cx, win.ix, win.py, wh, h,ww, win.cursor))
 
 class ColorConfig:
+    last_use_color = None
+    last_use_attr = None
     config = {
-        'label':11,
-        'normal':2,
-        'spicial':3,
-        'link':4,
-        'finish':9,
-        'attrs':5,
-        'map':6,
-        'green':7,
+        'label':10,
+        'normal':20,
+        'spicial':30,
+        'link':40,
+        'finish':90,
+        'attrs':50,
+        'map':60,
     }
     @classmethod
-    def default(cls):
+    def default(cls, background='black'):
         curses.init_pair(cls.config['finish'],curses.COLOR_GREEN, curses.COLOR_BLACK)
         curses.init_pair(cls.config['attrs'],curses.COLOR_YELLOW, curses.COLOR_BLACK)
         curses.init_pair(cls.config['label'], curses.COLOR_WHITE, curses.COLOR_BLUE)
-        curses.init_pair(cls.config['normal'],curses.COLOR_RED , curses.COLOR_BLACK)
-        curses.init_pair(cls.config['link'],curses.COLOR_BLUE , curses.COLOR_BLACK)
+        curses.init_pair(cls.config['normal'],curses.COLOR_WHITE , curses.COLOR_BLACK)
+        curses.init_pair(cls.config['link'],curses.COLOR_GREEN , curses.COLOR_BLACK)
         curses.init_pair(cls.config['map'],curses.COLOR_WHITE , curses.COLOR_BLACK)
-        curses.init_pair(cls.config['green'],curses.COLOR_GREEN , curses.COLOR_WHITE)
+        B = getattr(curses, 'COLOR_%s' % background.upper(), curses.COLOR_BLACK)
+        for color in termcolor.COLORS:
+            
+            try:
+                curses.init_pair(termcolor.COLORS[color],getattr(curses,"COLOR_%s" % color.upper()) , B)
+            except AttributeError:
+                curses.init_pair(termcolor.COLORS[color],curses.COLOR_WHITE , B)
 
     @classmethod
     def get(cls, label):
-        return curses.color_pair(cls.config.get(label, 'normal'))
+        if label in cls.config:
+            return curses.color_pair(cls.config.get(label, 'normal'))
+        else:
+            return curses.color_pair(termcolor.COLORS.get(label,20))
 
 
 class Application(EventMix):
@@ -85,7 +98,7 @@ class Application(EventMix):
     def Size(cls):
         if cls.init_screen is None:
             cls.init_screen = curses.initscr()
-            curses.start_color()
+            #curses.start_color()
             ColorConfig.default()
         Application.height, Application.width = cls.init_screen.getmaxyx()
         return Application.height, Application.width
@@ -806,21 +819,25 @@ class TextPanel(Stack):
 
     def draw_words(self,row,  words, max_width,attrs=None, mark=False):
         if mark:
-            m = attrs
+            m = curses.COLOR_YELLOW
             mark_m = m | curses.A_REVERSE
-
+            #mark_m =  ColorConfig.config.get('link')
         else:
             m = attrs
             mark_m = m
+        log(m,"mark:",mark_m)
         w_now = 1
         no = 0
-        for word in words:
-            if self.px == no:
-                self.pad.addstr(row, w_now, word, mark_m)
-            else:
-                self.pad.addstr(row, w_now, word, m)
-            w_now += (len(word) + 1)
-            no += 1
+        if mark:
+            for word in ascii2filter(words):
+                if self.px == no:
+                    self.pad.addstr(row, w_now, word, mark_m)
+                else:
+                    self.pad.addstr(row, w_now, word, m)
+                w_now += (len(word) + 1)
+                no += 1
+        else:
+            ascii2curses(self.pad, row, w_now, ' '.join(words), colors=ColorConfig)
 
     @classmethod
     def RunShell(cls, cmd, context, w_pad=20, max_h=15):
