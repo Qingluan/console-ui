@@ -851,6 +851,8 @@ class TextPanel(Stack):
             mark_m = m
         w_now = 1
         no = 0
+        if not words:
+            return
         if mark:
             now_word = words[self.px % len(words)]
             words = ' '.join(words)[self.pxc:self.pxc + max_width-self.border_len].split()
