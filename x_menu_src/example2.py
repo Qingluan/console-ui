@@ -5,18 +5,18 @@ import termcolor
 from termcolor import COLORS, ATTRIBUTES
 T = """
 1. The Zen of Python, by Tim Peters
-2. Beautiful is better than ugly.
-3.Explicit is better than implicit.
-Simple is better than complex.
-Complex is better than complicated.
-Flat is better than nested.
-Sparse is better than dense.
-Readability counts.
-Now is better than never.
-Although never is often better than *right* now.
-If the implementation is hard to explain, it's a bad idea.
-If the implementation is easy to explain, it may be a good idea.
-Namespaces are one honking great idea -- let's do more of those!""".split('\n')
+2. Beautiful is better than ugly.eautiful is better thaeautiful is better tha
+3.Explicit is better than impliciplicit is better than plicit is better than t.
+Simple is better than complex.   le is one two three four five six seven eight night ten
+Complex is better than complicatelex is better than comlex is better than comd.
+Flat is better than nested.       is better than nested is better than nested
+Sparse is better than dense.     se is better than densse is better than dens
+Readability counts.              ability counts.       ability counts.
+Now is better than never.        is better than never. is better than never.
+Although never is often better though never is often beough never is often bean *right* now.
+If the implementation is hard to he implementation is hhe implementation is hexplain, it's a bad idea.
+If the implementation is easy to he implementation is ehe implementation is eexplain, it may be a good idea.
+Namespaces are one honking great spaces are one honkingspaces are one honkingidea -- let's do more of those!""".split('\n')
 T = [str(i) + termcolor.colored(v, list(COLORS.keys())[i % len(COLORS)],attrs=[list(ATTRIBUTES.keys())[i % len(ATTRIBUTES)]] ) for i,v in enumerate(T)]
 T = '\n'.join(T)
 

@@ -706,17 +706,20 @@ class Stack(EventMix):
 class TextPanel(Stack):
     def __init__(self, text, id=None,max_width=None,*args, **opts):
         datas = text.split('\n')
-        lines = []
         if not max_width:
             H,W = Application.Size()
             max_width = W
+        lines = []
         for l in datas:
+            s = """
             if len(l) >= max_width - 1:
                 now = ''
                 for w in l.split():
                     if len(now) + len(w) >= max_width -2:
+
                         lines.append(now[1:])
-                        now = ''
+                        lines.append(w)
+                        now = '' 
                     else:
                         now += ' ' + w
                 if len(now) > 0:
@@ -724,10 +727,15 @@ class TextPanel(Stack):
 
             else:
                 lines.append(l)
+            """
+            lines.append(l)
 
 
         super().__init__(lines, id=id, *args, **opts)
+        self.pxc = 0
         self.pro = 0
+        self.direction = 'right'
+
     def reload_text(self, text, max_width=None):
         datas = text.split('\n')
         lines = []
@@ -735,6 +743,7 @@ class TextPanel(Stack):
             H,W = Application.Size()
             max_width = W
         for l in datas:
+            s = """
             if len(l) >= max_width - 1:
                 now = ''
                 for w in l.split():
@@ -748,43 +757,58 @@ class TextPanel(Stack):
 
             else:
                 lines.append(l)
+                """
+            lines.append(l)
         self.datas = lines        
 
     @listener('h')
     def left(self):
-        if self.ix > 0:
-            line_words_num = len(self.datas[self.ix - 1].split())
-        else:
-            return
-        if self.px > 0:
-            self.px -= 1
-        else:
-            self.px = line_words_num - 1
-            if self.py ==0:
-                if self.cursor > 0:
-                    self.cursor -= 1
-            else:
-                self.py -= 1
+        words = self.datas[self.ix].split()
+        line_words_num = len(words) 
+        line_len = len(self.datas[self.ix])
+        now_word = words[self.px % line_words_num]
 
-            self.ix -= 1
+        if self.pxc > 0 :
+            if len(self.datas[self.ix].encode()) > self.end_x - self.start_x:
+                self.pxc = (self.pxc - len(now_word)-1)
+            if self.pxc < 0:
+                self.pxc = 0
+
+            if self.px != 0 and self.pxc > self.end_x -self.start_x:
+                self.pxc = 0
+        else:
+            if self.px == 0:
+                self.pxc = line_len - self.end_x + self.start_x
+
+        self.px -= 1
+        self.px %= line_words_num
+        self.pxc %= line_len
+        #if self.pxc > 0 and self.pxc  < self.end_x - self.start_x:
+        #    self.pxc = 0
+        self.direction = 'left'
+        log('len:', line_words_num,'pxc',self.pxc,'px',self.px, 'width:', self.end_x - self.start_x)
 
 
     @listener('l')
     def right(self):
-        line_words_num = len(self.datas[self.ix].split()) - 1
-        log('line ',line_words_num)
-        if self.px  < line_words_num:
-            self.px += 1
-        else:
-            self.px = 0
+        words = self.datas[self.ix ].split()
+        line_len = len(self.datas[self.ix])
+        line_words_num = len(words) 
+        now_word = words[self.px % line_words_num]
+        self.px += 1
+        log('len:', line_words_num,'pxc',self.pxc,'px',self.px, 'width:', self.end_x - self.start_x)
+        if len(self.datas[self.ix].encode()) > self.end_x - self.start_x:
+            if line_len - self.pxc >  self.end_x - self.start_x:
+                self.pxc = (self.pxc + len(now_word)+1) % (line_len)
 
-            if self.ix < self.height - 1:
-                self.ix += 1
+            else:
+                if self.px == line_words_num:
+                    self.px = 0
+                    self.pxc = 0
+        self.direction = 'right'
+        self.px %= line_words_num
 
-                if self.py > self.end_y - self.start_y - self.border_len * 2 - 3:
-                    self.cursor += 1
-                else:
-                    self.py += 1
+
 
 
     def update_when_cursor_change(self, item, ch=None):
@@ -825,19 +849,30 @@ class TextPanel(Stack):
         else:
             m = attrs
             mark_m = m
-        log(m,"mark:",mark_m)
         w_now = 1
         no = 0
         if mark:
+            now_word = words[self.px]
+            words = ' '.join(words)[self.pxc:self.pxc + max_width-self.border_len].split()
+            if now_word in words:
+                if self.direction == 'right':
+                    px = words.index(now_word)
+                else:
+                    px = len(words) - words[-1::-1].index(now_word) - 1
+                    if px > self.px:
+                        px = self.px
+
+            else:
+                px = self.px
             for word in ascii2filter(words):
-                if self.px == no:
+                if px == no:
                     self.pad.addstr(row, w_now, word, mark_m)
                 else:
                     self.pad.addstr(row, w_now, word, m)
                 w_now += (len(word) + 1)
                 no += 1
         else:
-            ascii2curses(self.pad, row, w_now, ' '.join(words), colors=ColorConfig)
+            ascii2curses(self.pad, row, w_now, ' '.join(words), colors=ColorConfig, now=self.pxc,max_width=max_width)
 
     @classmethod
     def RunShell(cls, cmd, context, w_pad=20, max_h=15):
@@ -868,7 +903,6 @@ class TextPanel(Stack):
         msgBox(msg='alt+q to exit')
         if not  hasattr(screen, 'refresh'):
             screen = Application.init_screen
-        log('y/x',y,x)
         if focus:
             while k not in exit_keys:
                 select.action_listener(k)
@@ -879,7 +913,6 @@ class TextPanel(Stack):
                 # screen.refresh()
                 # select.pad.refresh()
                 k = screen.getch()
-                log(k)
 
             # Application.instance.refresh(clear=True)
             screen.refresh()
@@ -951,12 +984,12 @@ class Menu(Stack):
             content = self.get_text(row, datas=datas)
             if row == self.py and self.focus:
                 content = content.replace("\n","")
-                msg = content + ' '*  (max_width - len(content.encode()) -3)
-                self.draw_text(row+1,1, msg[:-1], max_width=max_width, mark=True)
+                msg = content + ' '*  (max_width - len(content.encode()) -3)[self.px:self.px + max_width]
+                self.draw_text(row+1,1, msg, max_width=max_width, mark=True)
             else:
                 content = content.replace("\n","")
-                M = content[:max_width-2] if len(content.encode()) >= max_width -2 else content
-                self.draw_text(row+1,1, M.strip()[:max_width-2], max_width=max_width, attrs=ColorConfig.get('normal'))
+                M = content[self.px:self.px + max_width-2] #if len(content.encode()) >= max_width -2 else content
+                self.draw_text(row+1,1, M.strip(), max_width=max_width, attrs=ColorConfig.get('normal'))
         log('%d %d ' %(self.y, self.x))
         right_width = min([self.x+ max_width +1,Application.width -1])
         self.pad.noutrefresh(0,0,self.y,self.x+1, self.y+len(datas) + 1,right_width)

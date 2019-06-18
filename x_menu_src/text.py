@@ -17,7 +17,7 @@ def ascii2filter(words):
     return strings
 
 
-def ascii2curses(context,row,col,string, colors=None):
+def ascii2curses(context,row,col,string, colors=None,now=0, max_width=None):
     attr = None 
     color = None
     strings = COLOR_SCAN.split(string)
@@ -33,9 +33,10 @@ def ascii2curses(context,row,col,string, colors=None):
             a = colors.last_use_attr
             if a in A_R:
                 attr = A_R[a]
-            context.addstr(row, col,first, attr | colors.get(color))
+            context.addstr(row, col,first[now:now+max_width], attr | colors.get(color))
         else:
-            context.addstr(row, col,first)
+            log('first:',first)
+            context.addstr(row, col,first[now:now+max_width])
         col += len(first)
     for i in range(len(strings)//2):
         a,msg = strings[i*2:(i+1)*2]
@@ -51,7 +52,7 @@ def ascii2curses(context,row,col,string, colors=None):
 
         if msg:
             #log(msg,row,col, COLORS_R[a],first)
-            context.addstr(row,col,msg, attr |  colors.get(color))
+            context.addstr(row,col,msg[now:now+max_width], attr |  colors.get(color))
             col += len(msg)
 
     colors.last_use_color = color
