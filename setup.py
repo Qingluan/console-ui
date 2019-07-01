@@ -12,7 +12,7 @@ setup(name='x_menu',
     include_package_data=True,
     zip_safe=False,
     packages=find_packages(),
-    install_requires=[''],
+    install_requires=['termcolor'],
     entry_points={
         'console_scripts': ['']
     },
