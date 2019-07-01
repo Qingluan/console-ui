@@ -592,7 +592,22 @@ class Stack(EventMix):
         else:
             self.pad.noutrefresh(0,0,y,x, y+ max_h -1,x+ max_width -1)
     
-    
+    @classmethod
+    def update_by_id(cls, id, content, weight=1, safe_clear=True, **attrs):
+        if not isinstance(content, (list,tuple,)): return
+        if not Application.instance:return
+        if id in Application.widgets:
+            this = Application.get_widget_by_id(id)
+            this.datas = content
+            for k in attrs:
+                if hasattr(this, k):
+                    setattr(this, k, attrs[k])
+        else:
+            s = cls(content, id=id)
+            Application.instance.add_widget(s, weight=weight)
+        if safe_clear:
+            Application.instance.refresh(clear=True)
+
 
     @classmethod
     def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True, max_height=10, exit_key=147, width=30):
@@ -635,6 +650,11 @@ class TextPanel(Stack):
     def __init__(self, text, id=None,max_width=None,*args, **opts):
         datas = text.split('\n')
         lines = []
+        if not max_width:
+            max_width = Application.width 
+            if Application.instance:
+                max_width = max_width // len(Application.widgets_opts)
+
         for l in datas:
             if len(l) >= max_width - 1:
                 now = ''
@@ -646,13 +666,30 @@ class TextPanel(Stack):
                         now += ' ' + w
                 if len(now) > 0:
                     lines.append(now)
-                    
             else:
                 lines.append(l)
-            
 
         super().__init__(lines, id=id, *args, **opts)
         self.pro = 0
+
+    def reload_text(self,text):
+        max_width = self.width
+        datas = text.split('\n')
+        lines = []
+        for l in datas:
+            if len(l) >= max_width - 1:
+                now = ''
+                for w in l.split():
+                    if len(now) + len(w) >= max_width -2:
+                        lines.append(now[1:])
+                        now = ''
+                    else:
+                        now += ' ' + w
+                if len(now) > 0:
+                    lines.append(now)
+            else:
+                lines.append(l)
+        self.datas = lines
 
     @listener('h')
     def left(self):
