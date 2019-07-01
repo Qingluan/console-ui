@@ -114,25 +114,30 @@ def text_load_by_width(txt, width):
     for line in lines:
         raw_line = ascii2filter(line)
         #width = Width + ((len(line) - len(raw_line)) % Width)
-        print("use width: ", width)
+        #print("use width: ", width)
         if len(raw_line) < width:
             L.append(line)
         else:
             seed = COLOR_SCAN2.finditer(line)
-            now_span = 0
+            sum_span = 0
             last_start = 0
+            last_prefix = ''
             for c_str in seed:
                 span = c_str.span()
-                l = span[1] - span[0]
-                now_span += l
-                if span[1] - now_span - last_start >= width -1 :
-                    one_line = line[last_start:span[0]]
+                this_span = span[1] - span[0]
+                if span[0] - sum_span - last_start >= width:
+                    one_line = last_prefix + line[last_start: last_start + width + sum_span]
+                    log(one_line)
                     L.append(one_line)
-                    now_span = l -1 
-                    last_start = span[0]
-            one_line = line[last_start:]
+                    last_start = last_start + width + sum_span
+                    sum_span = 0
+                    continue
+                sum_span += this_span
+                last_prefix = c_str.group()
+            one_line = last_prefix +  line[last_start:]
             if one_line:
                 L.append(one_line)
+                log(one_line)
 
     return L
 

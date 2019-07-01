@@ -8,6 +8,7 @@ from .charactors import SYMBOL
 from .text import ascii2curses
 from .text import ascii2filter, text_load_by_width
 from curses.textpad import Textbox, rectangle
+from .plugin import TextEditorPlugin
 import time
 
 
@@ -254,17 +255,51 @@ class Application(EventMix):
     def get_widget_by_id(cls, id):
         return cls.widgets.get(id)
 
-class _Textbox(Textbox):
+class _Textbox(Textbox, TextEditorPlugin):
 
-    def __init__(self, win, insert_mode=True):
+    def __init__(self, win, insert_mode=True,mode='cmd'):
         super(_Textbox, self).__init__(win, insert_mode)
+        self._edit_mode = mode
+        self._T = [ord(i) for i in '1234567890']
+        self._Tc = '1'
+
 
 
     def do_command(self, ch):
-        if ch == 127:  # BackSpace
-            Textbox.do_command(self, 8)
+        log("run key:",ch)
+        if self._edit_mode != 'cmd':
+            if ch == 127:  # BackSpace
+                Textbox.do_command(self, 8)
+            elif ch == 27:
+                self._edit_mode = 'cmd'
+                self.Title('[cmd] i : edit / q: exit')
+            elif ch == 9:
+                [Textbox.do_command(self, ord(' ')) for i in range(4)]
+            return Textbox.do_command(self, ch)
+        else:
+            if ch in self._T:
+                self._Tc += chr(ch)
+            elif ch == ord('j'):
+                [Textbox.do_command(self,curses.KEY_DOWN) for i in range(int(self._Tc))]
+                self._Tc = '1'
+            elif ch == ord('k'):
+                [Textbox.do_command(self, curses.KEY_UP) for i in range(int(self._Tc))]
+                self._Tc = '1'
+            elif ch == ord('h'):
+                [Textbox.do_command(self, curses.KEY_LEFT) for i in range(int(self._Tc))]
+                self._Tc = '1'
+            elif ch == ord('l'):
+                [Textbox.do_command(self, curses.KEY_RIGHT) for i in range(int(self._Tc))]
+                self._Tc = '1'
+            elif ch == ord('i'):
+                self._edit_mode = 'edit'
+                self._Tc = '1'
+                self.Title('[edit] ctrl+[ : cmd ')
+            elif ch == ord('q'):
+                Textbox.do_command(self, 7)
+                ch = 7
+            return Textbox.do_command(self, 0)
 
-        return Textbox.do_command(self, ch)
 
 class Text(EventMix):
 
@@ -283,18 +318,19 @@ class Text(EventMix):
         self.py = None
         self.Spy, self.Spx = None, None
         self.text = ''
+        self.mode = 'cmd'
 
         Height, Width  =  Application.Size()
         #Height = min([Height, height])
         #Width = min([Width, width])
         if not y or not x:
 
-            self.height = Height // 3
+            self.height = height if height else Height // 3 
             self.width = Width -3
             self.rect = [self.height * 2 , 0, Height-2, Width -3]
             self.loc = [self.height - 3 , self.width -1 , self.height * 2 + 1, 1]
             self.msg = None
-            self.title = "Ctrl-G to exit "
+            self.title = "Ctrl-G /i to edit, Ctrl-e to cmd to exit "
         else:
             if x + width > Width:
                 x = Width - width -3
@@ -320,7 +356,7 @@ class Text(EventMix):
                 if height < 2:
                     height =2
             else:
-                height = 2
+                height = height
 
             if height + y >= Height -3 :
                 # self.height = Height - 2 - y
@@ -335,13 +371,19 @@ class Text(EventMix):
             self.rect = [y , x, y + self.height , x + self.width]
             self.loc = [self.height - 1, self.width -1 , y+1, x +1]
             self.msg = None
-            self.title = "Ctrl-G to exit " if not title else title
+            self.title = "q to exit " if not title else title
 
             log('rect:', self.rect)
 
 
         if not Application.editor:
             Application.editor = self
+
+    def Title(self,msg):
+        msg = msg
+        stdscr = self.screen
+        stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
+        stdscr.refresh()
 
     def update(self, screen, pad_width=30,pad_height=30,ch=None, draw=True, style='label',title=None):
         if not self.screen:
@@ -355,6 +397,9 @@ class Text(EventMix):
         if len(lines) > self.loc[0]:
             self.rect[2] += len(lines) - self.loc[0]
             self.loc[0] = len(lines)
+        if pad_height > len(lines):
+            self.rect[2] += pad_height - self.loc[0]
+            self.loc[0] = pad_height
         editwin = curses.newwin(*self.loc)
         curses.curs_set(1)
         if self.text:
@@ -368,11 +413,12 @@ class Text(EventMix):
             msg = ' '+ self.title + (self.width - len(self.title) - 2) * ' ' if self.width - len(self.title) > 2 else self.title
             stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
         else:
-            msg = 'ctrl + G exit: ' + str(title)
+            msg = 'q exit: ' + str(title)
             stdscr.addstr(self.rect[0], self.rect[1]+4, msg, curses.A_BOLD |  ColorConfig.get('map') )
         stdscr.refresh()
 
         box = _Textbox(editwin)
+        box.Title = self.Title
 
         # Let the user edit until Ctrl-G is struck.
         box.edit()
@@ -384,11 +430,13 @@ class Text(EventMix):
         Application.instance.refresh(clear=True)
 
     @classmethod
-    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,height=20, width=80, **opts ):
+    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,x_pad=0, y_pad=0,height=20, width=80, **opts ):
         if context:
             y,x = context.cursor_yx
             y+=2
             x+=3
+            x+= x_pad
+            y+= y_pad
             screen = context.screen
         editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, height=height, **opts)
         #if height:
@@ -727,13 +775,8 @@ class TextPanel(Stack):
             H,W = Application.Size()
             max_width = W
         lines = []
-        if not max_width:
-            max_width = Application.width 
-            if Application.instance:
-                max_width = max_width // len(Application.widgets_opts)
-
         self.raw_text =text
-        lines = text_load_by_width(text, max_width)
+        lines = text_load_by_width(text, max_width-2)
 
 
         super().__init__(lines, id=id, *args, **opts)
@@ -741,15 +784,10 @@ class TextPanel(Stack):
         self.pro = 0
         self.direction = 'right'
 
-    def reload_text(self, text, max_width=None):
-        if not max_width:
-            H,W = Application.Size()
-            max_width = W
-        self.datas = text_load_by_width(text)
 
     def reload_text(self,text):
         max_width = self.width
-        self.datas = text_load_by_width(text)
+        self.datas = text_load_by_width(text, max_width -2 )
 
     @listener('h')
     def left(self):
@@ -846,7 +884,9 @@ class TextPanel(Stack):
             return
         if mark:
             now_word = words[self.px % len(words)]
-            words = ' '.join(words)[self.pxc:self.pxc + max_width-self.border_len].split()
+            #words = ' '.join(words)[self.pxc:self.pxc + max_width-self.border_len].split()
+            log("editor: max-w", max_width)
+            words = words
             if now_word in words:
                 if self.direction == 'right':
                     px = words.index(now_word)
@@ -857,6 +897,7 @@ class TextPanel(Stack):
 
             else:
                 px = self.px
+
             for word in ascii2filter(words):
                 if px == no:
                     self.pad.addstr(row, w_now, word, mark_m)
