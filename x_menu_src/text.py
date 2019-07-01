@@ -10,13 +10,14 @@ H_R = {'\x1b[%dm'%v: 'COLOR_%s' % k[3:].upper() for k,v in HIGHLIGHTS.items()}
 COLORS_R = {'\x1b[%dm'%v:k for k,v in COLORS.items()} 
 COLOR_SCAN = re.compile(r'(\x1b\[\d+m)')
 delete_sub = re.compile(r'(\x1b\[\d+\w)')
-COLOR_SCAN2 = re.compile(r'(\x1b\[(\d)\;\d+m)')
+COLOR_SCAN2 = re.compile(r'(\x1b\[(\d+)\;?\d*m)')
+
 
 def ascii2filter(words):
     if isinstance(words, list):
-        strings = delete_sub.sub('',' '.join(words)).split()
+        strings = COLOR_SCAN2.sub('',' '.join(words)).split()
     else:
-        strings = delete_sub.sub('',words)
+        strings = COLOR_SCAN2.sub('',words)
     return strings
 
 def fgascii2curses(context,row, col, string, colors=None, now=0,max_width=None):
@@ -107,4 +108,31 @@ def ascii2curses(context,row,col,string, colors=None,now=0, max_width=None):
     colors.last_use_color = color
     colors.last_use_attr = attr
 
+def text_load_by_width(txt, width):
+    lines = txt.split("\n")
+    L = []
+    for line in lines:
+        raw_line = ascii2filter(line)
+        #width = Width + ((len(line) - len(raw_line)) % Width)
+        print("use width: ", width)
+        if len(raw_line) < width:
+            L.append(line)
+        else:
+            seed = COLOR_SCAN2.finditer(line)
+            now_span = 0
+            last_start = 0
+            for c_str in seed:
+                span = c_str.span()
+                l = span[1] - span[0]
+                now_span += l
+                if span[1] - now_span - last_start >= width -1 :
+                    one_line = line[last_start:span[0]]
+                    L.append(one_line)
+                    now_span = l -1 
+                    last_start = span[0]
+            one_line = line[last_start:]
+            if one_line:
+                L.append(one_line)
+
+    return L
 

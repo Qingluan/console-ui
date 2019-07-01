@@ -6,7 +6,7 @@ from .event import EventMix, listener
 from .log import log
 from .charactors import SYMBOL
 from .text import ascii2curses
-from .text import ascii2filter
+from .text import ascii2filter, text_load_by_width
 from curses.textpad import Textbox, rectangle
 import time
 
@@ -98,7 +98,7 @@ class Application(EventMix):
     def Size(cls):
         if cls.init_screen is None:
             cls.init_screen = curses.initscr()
-            #curses.start_color()
+            curses.start_color()
             ColorConfig.default()
         Application.height, Application.width = cls.init_screen.getmaxyx()
         return Application.height, Application.width
@@ -679,11 +679,13 @@ class Stack(EventMix):
             cls.last_popup.pad.refresh(*cls.last_popup.last_refresh)
 
     @classmethod
-    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True,title='Select', max_height=10, exit_key=147, width=30):
+    def Popup(cls,datas=None,context=None, screen=None, y=None ,x=None,focus=True,title='Select',x_pad=0,y_pad=0, max_height=10, exit_key=147, width=30):
         if context:
             y,x = context.cursor_yx
             y+=1
             x+=1
+            x += x_pad
+            y += y_pad
             screen = context.screen
         select = cls(datas, id='unknow')
         cls.last_popup = select
@@ -730,25 +732,8 @@ class TextPanel(Stack):
             if Application.instance:
                 max_width = max_width // len(Application.widgets_opts)
 
-        for l in datas:
-            s = """
-            if len(l) >= max_width - 1:
-                now = ''
-                for w in l.split():
-                    if len(now) + len(w) >= max_width -2:
-
-                        lines.append(now[1:])
-                        lines.append(w)
-                        now = '' 
-                    else:
-                        now += ' ' + w
-                if len(now) > 0:
-                    lines.append(now)
-
-            else:
-                lines.append(l)
-            """
-            lines.append(l)
+        self.raw_text =text
+        lines = text_load_by_width(text, max_width)
 
 
         super().__init__(lines, id=id, *args, **opts)
@@ -757,48 +742,14 @@ class TextPanel(Stack):
         self.direction = 'right'
 
     def reload_text(self, text, max_width=None):
-        datas = text.split('\n')
-        lines = []
         if not max_width:
             H,W = Application.Size()
             max_width = W
-        for l in datas:
-            s = """
-            if len(l) >= max_width - 1:
-                now = ''
-                for w in l.split():
-                    if len(now) + len(w) >= max_width -2:
-                        lines.append(now[1:])
-                        now = ''
-                    else:
-                        now += ' ' + w
-                if len(now) > 0:
-                    lines.append(now)
-
-            else:
-                lines.append(l)
-                """
-            lines.append(l)
-        self.datas = lines        
+        self.datas = text_load_by_width(text)
 
     def reload_text(self,text):
         max_width = self.width
-        datas = text.split('\n')
-        lines = []
-        for l in datas:
-            if len(l) >= max_width - 1:
-                now = ''
-                for w in l.split():
-                    if len(now) + len(w) >= max_width -2:
-                        lines.append(now[1:])
-                        now = ''
-                    else:
-                        now += ' ' + w
-                if len(now) > 0:
-                    lines.append(now)
-            else:
-                lines.append(l)
-        self.datas = lines
+        self.datas = text_load_by_width(text)
 
     @listener('h')
     def left(self):
@@ -826,6 +777,7 @@ class TextPanel(Stack):
         #    self.pxc = 0
         self.direction = 'left'
         log('len:', line_words_num,'pxc',self.pxc,'px',self.px, 'width:', self.end_x - self.start_x)
+
 
 
     @listener('l')
@@ -925,11 +877,11 @@ class TextPanel(Stack):
         cls.run_background(cmder, cmd,y, x, context.screen, callback=cls.Popup)
 
     @classmethod
-    def Popup(cls,text,context=None, screen=None, y=None ,x=None,focus=True,  max_height=30,exit_keys=[147],width=50):
+    def Popup(cls,text,context=None, screen=None, y=None ,x=None,focus=True,x_pad=1, y_pad=1,  max_height=30,exit_keys=[147],width=50):
         if context:
             y,x = context.cursor_yx
-            y+=1
-            x+=1
+            x+= x_pad
+            y+= y_pad
             screen = context.screen
         select = cls(text, id='unknow', max_width=width)
         cls.last_popup = select
