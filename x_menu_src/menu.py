@@ -257,13 +257,28 @@ class Application(EventMix):
 
 class _Textbox(Textbox, TextEditorPlugin):
 
-    def __init__(self, win, insert_mode=True,mode='cmd'):
+    def __init__(self, win, width,insert_mode=True,mode='cmd'):
         super(_Textbox, self).__init__(win, insert_mode)
         self._edit_mode = mode
+        self._win = win
+        self.width = width 
         self._T = [ord(i) for i in '1234567890']
         self._Tc = '1'
 
+    def msg(self, msg):
+        msgBox(msg=msg)
 
+    def print_line(self, text, row=None,col=0):
+        if hasattr(self, '_win'):
+            editwin = self._win
+        elif hasattr(self, 'editwin'):
+            editwin = self.editwin
+        l = text
+        if not row:
+            ascii2curses(editwin, l.strip(), colors=ColorConfig, now=0,max_width=self.width)
+        else:
+            row = int(row)
+            ascii2curses(editwin, row, col, l.strip(), colors=ColorConfig, now=0,max_width=self.width)
 
     def do_command(self, ch):
         log("run key:",ch)
@@ -295,9 +310,16 @@ class _Textbox(Textbox, TextEditorPlugin):
                 self._edit_mode = 'edit'
                 self._Tc = '1'
                 self.Title('[edit] ctrl+[ : cmd ')
+            elif ch == ord('g'):
+                cu = self._win.getyx()
+                msgBox(msg=str(cu))
+                
             elif ch == ord('q'):
                 Textbox.do_command(self, 7)
-                ch = 7
+                return Textbox.do_command(self, 7)
+            else:
+                log("run extend")
+                self.extend_do(ch)
             return Textbox.do_command(self, 0)
 
 
@@ -314,8 +336,8 @@ class Text(EventMix):
         self.pad = None
         self.top = 0
 
-        self.px = None
-        self.py = None
+        self.px = 0
+        self.py = 0
         self.Spy, self.Spx = None, None
         self.text = ''
         self.mode = 'cmd'
@@ -382,8 +404,10 @@ class Text(EventMix):
     def Title(self,msg):
         msg = msg
         stdscr = self.screen
-        stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
+        stdscr.addstr(self.rect[0]-1, self.rect[1], msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
         stdscr.refresh()
+
+        
 
     def update(self, screen, pad_width=30,pad_height=30,ch=None, draw=True, style='label',title=None):
         if not self.screen:
@@ -393,7 +417,8 @@ class Text(EventMix):
         stdscr = self.screen
 
         log('self.loc', self.loc)
-        lines = self.text.split("\n")
+        #lines = self.text.split("\n")
+        lines = text_load_by_width(self.text, self.width -1)
         if len(lines) > self.loc[0]:
             self.rect[2] += len(lines) - self.loc[0]
             self.loc[0] = len(lines)
@@ -401,11 +426,13 @@ class Text(EventMix):
             self.rect[2] += pad_height - self.loc[0]
             self.loc[0] = pad_height
         editwin = curses.newwin(*self.loc)
+        self.editwin = editwin
         curses.curs_set(1)
         if self.text:
-            for row, l in enumerate(lines):
-                log('row', row, len(l))
-                editwin.addstr(row,0, l.strip()[:self.width])
+            for row, l in enumerate(lines[self.px:self.px + pad_height]):
+                log('text:', row, len(l), self.loc)
+                ascii2curses(editwin, row, 0, l.strip(), colors=ColorConfig, now=0,max_width=self.width)
+                #editwin.addstr(row,0, l.strip()[:self.width])
 
         rectangle(stdscr, *self.rect)
         log('self.loc', self.loc, 'self.rect', self.rect)
@@ -417,7 +444,7 @@ class Text(EventMix):
             stdscr.addstr(self.rect[0], self.rect[1]+4, msg, curses.A_BOLD |  ColorConfig.get('map') )
         stdscr.refresh()
 
-        box = _Textbox(editwin)
+        box = _Textbox(editwin, self.width)
         box.Title = self.Title
 
         # Let the user edit until Ctrl-G is struck.

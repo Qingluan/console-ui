@@ -58,9 +58,27 @@ def fgascii2curses(context,row, col, string, colors=None, now=0,max_width=None):
     colors.last_use_color = color
     colors.last_use_attr = attr
 
+
+class TextSave:
+    text = {}
+    last_row = 0
+    @classmethod
+    def save(cls, string, row=0):
+        cls.text[row] = string
+        cls.last_row = row
+    @classmethod
+    def load(cls, row=-2):
+        if row == -1:
+            return '\n'.join(list(cls.text.values()))
+        elif row == -2:
+            return cls.text.get(cls.last_row,'')
+        else:
+            return cls.text.get(row,'')
+
 def ascii2curses(context,row,col,string, colors=None,now=0, max_width=None):
     attr = None 
     color = None
+    TextSave.save(string,row)
     if COLOR_SCAN2.search(string):
         fgascii2curses(context,row,col,string, colors=colors,now=now, max_width=max_width)
         return
