@@ -6,7 +6,7 @@ from .event import EventMix, listener
 from .log import log
 from .charactors import SYMBOL
 from .text import ascii2curses
-from .text import ascii2filter, text_load_by_width
+from .text import ascii2filter, text_load_by_width, TextSave
 from curses.textpad import Textbox, rectangle
 from .plugin import TextEditorPlugin
 import time
@@ -274,22 +274,41 @@ class _Textbox(Textbox, TextEditorPlugin):
         elif hasattr(self, 'editwin'):
             editwin = self.editwin
         l = text
-        if not row:
-            ascii2curses(editwin, l.strip(), colors=ColorConfig, now=0,max_width=self.width)
+        if row is None:
+            ascii2curses(editwin, l, colors=ColorConfig, now=0,max_width=self.width)
         else:
             row = int(row)
-            ascii2curses(editwin, row, col, l.strip(), colors=ColorConfig, now=0,max_width=self.width)
+            col = len(l) - len(l.lstrip())
+            ascii2curses(editwin, row, col, l, colors=ColorConfig, now=0,max_width=self.width)
 
     def do_command(self, ch):
-        log("run key:",ch)
+        #log("run key:",ch)
         if self._edit_mode != 'cmd':
             if ch == 127:  # BackSpace
                 Textbox.do_command(self, 8)
             elif ch == 27:
                 self._edit_mode = 'cmd'
                 self.Title('[cmd] i : edit / q: exit')
+                now_text = self.gather().split('\n')
+                now_raw_text = TextSave.load(-1).split('\n')
+                for no,i in enumerate(now_text):
+                    try:
+                        if i.strip() != ascii2filter(now_raw_text[no]).strip():
+                            self.msg(i)
+                            TextSave.save(i, row=no)
+                    except IndexError:
+                        pass
+
+                if len(now_text) > len(now_raw_text):
+                    for i in range(len(now_raw_text), len(now_text)):
+                        log('save:', now_text[i])
+                        self.msg(now_text[i])
+                        TextSave.save(now_text[i], row=i)
+                #    self.print_line(l, row=no)
             elif ch == 9:
                 [Textbox.do_command(self, ord(' ')) for i in range(4)]
+            else:
+                self.extend_do_edit(ch)
             return Textbox.do_command(self, ch)
         else:
             if ch in self._T:
@@ -310,12 +329,10 @@ class _Textbox(Textbox, TextEditorPlugin):
                 self._edit_mode = 'edit'
                 self._Tc = '1'
                 self.Title('[edit] ctrl+[ : cmd ')
-            elif ch == ord('g'):
-                cu = self._win.getyx()
-                msgBox(msg=str(cu))
                 
             elif ch == ord('q'):
                 Textbox.do_command(self, 7)
+                TextSave.clear()
                 return Textbox.do_command(self, 7)
             else:
                 log("run extend")
@@ -325,7 +342,7 @@ class _Textbox(Textbox, TextEditorPlugin):
 
 class Text(EventMix):
 
-    def __init__(self,content=None,title=None, id=None,y=None,x=None,width=80, height=30, **ops):
+    def __init__(self,content=None,title=None, id=None,y=None,x=None,width=80, height=30, file_path=None,**ops):
         self.screen = None
         self.cursor = 0
         self.border = 1
@@ -341,6 +358,8 @@ class Text(EventMix):
         self.Spy, self.Spx = None, None
         self.text = ''
         self.mode = 'cmd'
+
+        self._file = file_path if file_path else ''
 
         Height, Width  =  Application.Size()
         #Height = min([Height, height])
@@ -428,14 +447,22 @@ class Text(EventMix):
         editwin = curses.newwin(*self.loc)
         self.editwin = editwin
         curses.curs_set(1)
+        Height, Width  =  Application.Size()
+        if self.rect[2] >= Height:
+            self.rect[2] = Height - 2
+            self.loc[0] = Height -3 
+        if self.rect[3] >= Width:
+            self.rect[3] = Width -1 
+            self.loc[1] = Width -2 
         if self.text:
-            for row, l in enumerate(lines[self.px:self.px + pad_height]):
+            for row, l in enumerate(lines[self.px:self.px + self.loc[0]]):
                 log('text:', row, len(l), self.loc)
-                ascii2curses(editwin, row, 0, l.strip(), colors=ColorConfig, now=0,max_width=self.width)
+                ascii2curses(editwin, row, 0, l, colors=ColorConfig, now=0,max_width=self.width)
                 #editwin.addstr(row,0, l.strip()[:self.width])
 
-        rectangle(stdscr, *self.rect)
+        log('self.loc', self.loc, 'self.rect', self.rect, Height)
         log('self.loc', self.loc, 'self.rect', self.rect)
+        rectangle(stdscr, *self.rect)
         if style == 'label':
             msg = ' '+ self.title + (self.width - len(self.title) - 2) * ' ' if self.width - len(self.title) > 2 else self.title
             stdscr.addstr(self.rect[0]-1, self.rect[1]+1, msg, curses.A_BOLD | curses.A_REVERSE | ColorConfig.get('label') )
@@ -446,6 +473,8 @@ class Text(EventMix):
 
         box = _Textbox(editwin, self.width)
         box.Title = self.Title
+        if self._file:
+            box.set_save_file(self._file)
 
         # Let the user edit until Ctrl-G is struck.
         box.edit()
@@ -457,7 +486,7 @@ class Text(EventMix):
         Application.instance.refresh(clear=True)
 
     @classmethod
-    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,x_pad=0, y_pad=0,height=20, width=80, **opts ):
+    def Popup(cls,content=None,context=None, screen=None,title=None, y=None,x=None,x_pad=0, y_pad=0,height=20, width=80, file_path=None, **opts ):
         if context:
             y,x = context.cursor_yx
             y+=2
@@ -465,7 +494,8 @@ class Text(EventMix):
             x+= x_pad
             y+= y_pad
             screen = context.screen
-        editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, height=height, **opts)
+        TextSave.clear()
+        editor = cls(title=title,content=content, id='text', y=y, x=x, width=width, height=height, file_path=file_path, **opts)
         #if height:
         #    editor.height = height
         editor.update(screen, pad_height=height,title=title, style=opts.get('style'))
@@ -720,7 +750,6 @@ class Stack(EventMix):
             self.pad.border(0)
         # self.pad.refresh(0,0,y,x, y+len(datas) - 1,x+ max_width -1)
         self.last_refresh = [0,0,y,x, y +max_h - 1, x + max_width -1 ]
-        log('save refresh:',self.last_refresh)
 
         if refresh:
             self.pad.refresh(0,0,y,x, y+max_h -1,x+ max_width -1)
@@ -1260,7 +1289,7 @@ class Map(Stack):
             self.cursor = 0
             self.py = city_y
         self.py = city_y  - self.cursor
-        log('city: row:%d , col:%d' % (city_y,city_x ),"py:",self.py, "px:", self.px)
+        #log('city: row:%d , col:%d' % (city_y,city_x ),"py:",self.py, "px:", self.px)
 
 
 

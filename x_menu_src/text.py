@@ -23,7 +23,8 @@ def ascii2filter(words):
 def fgascii2curses(context,row, col, string, colors=None, now=0,max_width=None):
     attr = 0 
     color = 0
-    strings = COLOR_SCAN2.split(string.strip())
+    strings = COLOR_SCAN2.split(string)
+    #strings = COLOR_SCAN2.split(string.strip())
     first = strings.pop(0)
     if len(first) > 0:
         if colors.last_use_color:
@@ -34,7 +35,6 @@ def fgascii2curses(context,row, col, string, colors=None, now=0,max_width=None):
                 attr = A_R[a]
             context.addstr(row, col,first[now:now+max_width], attr | colors.get(color))
         else:
-            log('Fcol:',col, '\r' in string , 'f len:',len(first), first.encode())
             log("-----")
             context.addstr(row, col,first[now:now+max_width -2])
         col += len(first) % max_width
@@ -50,7 +50,7 @@ def fgascii2curses(context,row, col, string, colors=None, now=0,max_width=None):
         else:
             color = 0
         if msg:
-            log('row:',row,'col:',col,'now:',now,'msg len:',len(msg), max_width)
+            #log('row:',row,'col:',col,'now:',now,'msg len:',len(msg), max_width)
             if col >= max_width:
                 break
             context.addstr(row,col,msg[now:now+max_width- col - 1], attr |  colors.get(color))
@@ -63,9 +63,15 @@ class TextSave:
     text = {}
     last_row = 0
     @classmethod
-    def save(cls, string, row=0):
+    def save(cls, string, row):
         cls.text[row] = string
         cls.last_row = row
+
+    @classmethod
+    def clear(cls):
+        cls.text = {}
+        last_row = 0
+
     @classmethod
     def load(cls, row=-2):
         if row == -1:
@@ -99,7 +105,6 @@ def ascii2curses(context,row,col,string, colors=None,now=0, max_width=None):
                 attr = A_R[a]
             context.addstr(row, col,first[now:now+max_width], attr | colors.get(color))
         else:
-            log('Fcol:',col, '\r' in string , 'f len:',len(first), first.encode())
             log("-----")
             context.addstr(row, col,first[now:now+max_width -2])
         col += len(first) % max_width
